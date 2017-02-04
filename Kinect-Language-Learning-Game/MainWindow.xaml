@@ -1,8 +1,9 @@
 ﻿<Window x:Class="Microsoft.Samples.Kinect.ColorBasics.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Color Basics" 
+        Title="Color Basics"
         Height="600" Width="700" 
+        Loaded="WindowLoaded"
         Closing="MainWindow_Closing"> 
   <Window.Resources>
     <SolidColorBrush x:Key="MediumGreyBrush" Color="#ff6e6e6e" />

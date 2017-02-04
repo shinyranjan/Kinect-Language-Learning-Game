@@ -14,6 +14,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
+    using Microsoft.Speech.AudioFormat;
+    using Microsoft.Speech.Recognition;
+    using System.Threading;
 
     /// <summary>
     /// Interaction logic for MainWindow
@@ -24,6 +27,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// Active Kinect sensor
         /// </summary>
         private KinectSensor kinectSensor = null;
+
+
+        private SpeechRecognitionEngine speechEngine = null;
+
+        private KinectAudioStream audioStream = null;
 
         /// <summary>
         /// Reader for color frames
@@ -44,6 +52,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// </summary>
         private string statusText = null;
 
+        private bool reading;
+        private Thread readingThread;
+        private FileStream fileStream;
+
+        int rec_time = 2 * 16000;
         /// <summary>
         /// Initializes a new instance of the MainWindow class.
         /// </summary>
@@ -83,6 +96,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
+
+            
+
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -181,6 +197,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 this.kinectSensor.Close();
                 this.kinectSensor = null;
             }
+
+            if (null != this.audioStream)
+            {
+                this.audioStream.SpeechActive = false;
+            }
+
+            if (null != this.speechEngine)
+            {
+                this.speechEngine.SpeechRecognized -= this.SpeechRecognized;
+                this.speechEngine.SpeechRecognitionRejected -= this.SpeechRejected;
+                this.speechEngine.RecognizeAsyncStop();
+            }
+
         }
 
         /// <summary>
@@ -268,5 +297,124 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
                                                             : Properties.Resources.SensorNotAvailableStatusText;
         }
+
+        /// <summary>
+        /// Execute initialization tasks.
+        /// </summary>
+        /// <param name="sender">object sending the event</param>
+        /// <param name="e">event arguments</param>
+        private void WindowLoaded(object sender, RoutedEventArgs e)
+        {
+            if (this.kinectSensor != null)
+            {
+                // grab the audio stream
+                System.Collections.Generic.IReadOnlyList<AudioBeam> audioBeamList = this.kinectSensor.AudioSource.AudioBeams;
+                System.IO.Stream audioStream = audioBeamList[0].OpenInputStream();
+
+                // create the convert stream
+                this.audioStream = new KinectAudioStream(audioStream);
+            }
+
+            RecognizerInfo ri = GetKinectRecognizer();
+
+            if (null != ri)
+            {
+                this.speechEngine = new SpeechRecognitionEngine(ri.Id);
+
+
+                var keyword = new Choices();
+                keyword.Add(new SemanticResultValue("draw", 1));
+
+                var gb = new GrammarBuilder { Culture = ri.Culture };
+                gb.Append(keyword);
+                var g = new Grammar(gb);
+                speechEngine.LoadGrammar(g);
+
+                speechEngine.SpeechRecognized += this.SpeechRecognized;
+                speechEngine.SpeechRecognitionRejected += this.SpeechRejected;
+
+                // let the convertStream know speech is going active
+                this.audioStream.SpeechActive = true;
+
+                speechEngine.SetInputToAudioStream(
+                    this.audioStream, new SpeechAudioFormatInfo(EncodingFormat.Pcm, 16000, 16, 1, 32000, 2, null));
+
+                speechEngine.RecognizeAsync(RecognizeMode.Multiple);
+
+                
+            }
+            else
+            {
+                Debug.WriteLine("No recognizer");
+            }
+        }
+
+
+        private static RecognizerInfo GetKinectRecognizer()
+        {
+            Debug.WriteLine("In Get");
+            foreach (RecognizerInfo recognizer in SpeechRecognitionEngine.InstalledRecognizers())
+            {
+                Debug.WriteLine("In For");
+                string value;
+                recognizer.AdditionalInfo.TryGetValue("Kinect", out value);
+                if ("True".Equals(value, StringComparison.OrdinalIgnoreCase) && "en-US".Equals(recognizer.Culture.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return recognizer;
+                }
+            }
+
+            return null;
+        }
+        /// <summary>
+        /// Handler for rejected speech events.
+        /// </summary>
+        /// <param name="sender">object sending the event.</param>
+        /// <param name="e">event arguments.</param>
+        private void SpeechRejected(object sender, SpeechRecognitionRejectedEventArgs e)
+        {
+            
+        }
+
+        /// <summary>
+        /// Handler for rejected speech events.
+        /// </summary>
+        /// <param name="sender">object sending the event.</param>
+        /// <param name="e">event arguments.</param>
+        private void SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
+        {
+            
+            // Speech utterance confidence below which we treat speech as if it hadn't been heard
+            const double ConfidenceThreshold = 0.3;
+
+            if (!reading && e.Result.Confidence >= ConfidenceThreshold)
+            {
+                Debug.WriteLine("Matched");
+
+                this.reading = true;
+                this.readingThread = new Thread(AudioTranslationThread);
+                this.readingThread.Start();
+            }
+        }
+
+        private void AudioTranslationThread()
+        {
+
+            byte[] audioBuffer = new byte[rec_time];
+
+            Debug.WriteLine("Recording");
+            int readCount = audioStream.Read(audioBuffer, 0, audioBuffer.Length);
+            Debug.WriteLine("Done");
+
+            //TODO Recognition and Translation
+
+            this.reading = false;
+            
+        }
+
     }
+
 }
+
+
+
