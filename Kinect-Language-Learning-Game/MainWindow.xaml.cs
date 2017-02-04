@@ -289,7 +289,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                         if ((colorFrameDescription.Width == bitmap.Width) && (colorFrameDescription.Height == bitmap.Height))
                         {
                             bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                            colorBitmap.WritePixels(new Int32Rect(0, 0, colorFrameDescription.Width, colorFrameDescription.Height), bmpData.Scan0, bmpData.Stride, 0);
+                            colorBitmap.WritePixels(new Int32Rect(0, 0, colorFrameDescription.Width, colorFrameDescription.Height), bmpData.Scan0, bmpData.Stride * bmpData.Width, bmpData.Stride);
                             bitmap.UnlockBits(bmpData);
                             this.colorBitmap.AddDirtyRect(new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight));
 
