@@ -30,6 +30,10 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// </summary>
         private ColorFrameReader colorFrameReader = null;
 
+        private BodyFrameReader bodyFrameReader = null;
+
+        private CoordinateMapper coordinateMapper = null;
+
         /// <summary>
         /// Bitmap to display
         /// </summary>
@@ -51,8 +55,12 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             // open the reader for the color frames
             this.colorFrameReader = this.kinectSensor.ColorFrameSource.OpenReader();
 
+            this.bodyFrameReader = this.kinectSensor.BodyFrameSource.OpenReader();
+            this.bodyFrameReader.FrameArrived += BodyFrameReader_FrameArrived;
+
             // wire handler for frame arrival
             this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
+            this.coordinateMapper = this.kinectSensor.CoordinateMapper;
 
             // create the colorFrameDescription from the ColorFrameSource using Bgra format
             FrameDescription colorFrameDescription = this.kinectSensor.ColorFrameSource.CreateFrameDescription(ColorImageFormat.Bgra);
@@ -75,6 +83,42 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
+        }
+
+        private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
+        {
+            bool dataReceived = false;
+            Body[] bodies = null;
+            using (BodyFrame bodyFrame = e.FrameReference.AcquireFrame())
+            {
+                if (null == bodyFrame)
+                {
+                    return;
+                }
+
+                if (null == bodies)
+                {
+                    bodies = new Body[bodyFrame.BodyCount];
+                }
+
+                bodyFrame.GetAndRefreshBodyData(bodies);
+                dataReceived = true;
+            }
+
+            if (!dataReceived)
+            {
+                return;
+            }
+
+            foreach(Body body in bodies)
+            {
+                if (!body.IsTracked)
+                {
+                    continue;
+                }
+
+                // TODO mapping from camera coordinate system to color image
+            }
         }
 
         /// <summary>
