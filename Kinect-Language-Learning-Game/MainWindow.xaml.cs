@@ -14,6 +14,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
+    using System.Collections.Generic;
+    using System.Drawing;
+    using System.Drawing.Imaging;
 
     /// <summary>
     /// Interaction logic for MainWindow
@@ -33,6 +36,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private BodyFrameReader bodyFrameReader = null;
 
         private CoordinateMapper coordinateMapper = null;
+
+        // TODO lock access to this
+        private Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> handJoints = new Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>>();
 
         /// <summary>
         /// Bitmap to display
@@ -117,7 +123,25 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     continue;
                 }
 
-                // TODO mapping from camera coordinate system to color image
+                // Map from camera coordinate system to color image
+                CameraSpacePoint[] jointPoints = new CameraSpacePoint[]
+                {
+                    body.Joints[JointType.HandLeft].Position,
+                    body.Joints[JointType.HandTipLeft].Position,
+                    body.Joints[JointType.HandRight].Position,
+                    body.Joints[JointType.HandTipRight].Position
+                };
+
+                ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[jointPoints.Length];
+                this.coordinateMapper.MapCameraPointsToColorSpace(jointPoints, colorSpacePoints);
+
+                lock (handJoints)
+                {
+                    handJoints[JointType.HandLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[0], colorSpacePoints[0]);
+                    handJoints[JointType.HandTipLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[1], colorSpacePoints[1]);
+                    handJoints[JointType.HandRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[2], colorSpacePoints[2]);
+                    handJoints[JointType.HandTipRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[3], colorSpacePoints[3]);
+                }
             }
         }
 
@@ -238,17 +262,37 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                     using (KinectBuffer colorBuffer = colorFrame.LockRawImageBuffer())
                     {
-                        this.colorBitmap.Lock();
+                        Bitmap bitmap = new Bitmap(colorFrameDescription.Width, colorFrameDescription.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-                        // verify data and write the new color frame data to the display bitmap
-                        if ((colorFrameDescription.Width == this.colorBitmap.PixelWidth) && (colorFrameDescription.Height == this.colorBitmap.PixelHeight))
-                        {
-                            colorFrame.CopyConvertedFrameDataToIntPtr(
-                                this.colorBitmap.BackBuffer,
+                        BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                        colorFrame.CopyConvertedFrameDataToIntPtr(bmpData.Scan0,
                                 (uint)(colorFrameDescription.Width * colorFrameDescription.Height * 4),
                                 ColorImageFormat.Bgra);
 
+                        bitmap.UnlockBits(bmpData);
+
+                        Graphics graphics = Graphics.FromImage(bitmap);
+
+                        lock (handJoints)
+                        {
+                            foreach (KeyValuePair<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> pair in handJoints)
+                            {
+                                float x = pair.Value.Item2.X;
+                                float y = pair.Value.Item2.Y;
+                                graphics.DrawEllipse(new System.Drawing.Pen(System.Drawing.Color.Red, 5), x, y, 10, 10);
+                            }
+                        }
+
+                        this.colorBitmap.Lock();
+
+                        // verify data and write the new color frame data to the display bitmap
+                        if ((colorFrameDescription.Width == bitmap.Width) && (colorFrameDescription.Height == bitmap.Height))
+                        {
+                            bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                            colorBitmap.WritePixels(new Int32Rect(0, 0, colorFrameDescription.Width, colorFrameDescription.Height), bmpData.Scan0, bmpData.Stride, 0);
+                            bitmap.UnlockBits(bmpData);
                             this.colorBitmap.AddDirtyRect(new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight));
+
                         }
 
                         this.colorBitmap.Unlock();
