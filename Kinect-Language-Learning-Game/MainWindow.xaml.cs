@@ -70,7 +70,6 @@ namespace ColorBasics
         /// Reader for audio frames
         /// </summary>
         private AudioBeamFrameReader audioBeamReader = null;
-        //private List<short> audioSamples;
         private MemoryStream audioSnippet;
         private int maxAudioSamples;
 
@@ -80,6 +79,10 @@ namespace ColorBasics
         private WriteableBitmap colorBitmap = null;
 
         private bool reading;
+
+        private bool readyToDrawNewSymbol = true;
+        private Image currentlyDisplayedSymbol = null;
+
         private Thread readingThread;
 
         int rec_time = 2 * 16000;
@@ -130,26 +133,6 @@ namespace ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
-        }
-
-        private void SpeechToText_TextReceived(object sender, SpeechToText.RecognizedTextArgs args)
-        {
-            if (null == args.Text)
-            {
-                return;
-            }
-
-            // After receiving the text, translate it into Chinese
-            Console.WriteLine("Recognized text: " + args.Text);
-            string translation = TranslateText.Translate(args.Text);
-
-            if (null != translation)
-            {
-                lock (textOnScreenLock)
-                {
-                    textOnScreen = translation;
-                }
-            }
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -264,9 +247,9 @@ namespace ColorBasics
 
             if (null != this.audioStream)
             {
+                this.audioStream.SpeechActive = false;
                 this.audioStream.Dispose();
                 this.audioStream = null;
-                this.audioStream.SpeechActive = false;
             }
 
             if (null != this.audioBeamReader)
@@ -325,6 +308,25 @@ namespace ColorBasics
                             }
                         }
 
+                        if (null != textOnScreen)
+                        {
+                            lock (textOnScreenLock)
+                            {
+                                // Draw letters
+                                if (null != textOnScreen)
+                                {
+                                    currentlyDisplayedSymbol = DrawLetter(textOnScreen);
+                                }
+                            }
+
+                            int symbolWidth = currentlyDisplayedSymbol.Width;
+                            int symbolHeight = currentlyDisplayedSymbol.Height;
+                            int symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
+                            int symbolYPosition = colorFrameDescription.Height / 2 - symbolHeight / 2;
+                            graphics.DrawImage(currentlyDisplayedSymbol, symbolXPosition, symbolYPosition);
+                        }
+
+                        /*
                         using (Font drawFont = new Font("Microsoft JhengHei", 120))
                         {
                             using (SolidBrush drawBrush = new SolidBrush(System.Drawing.Color.FromArgb(128, System.Drawing.Color.Red)))
@@ -337,7 +339,7 @@ namespace ColorBasics
                                     }
                                 }
                             }
-                        }
+                        }*/
 
                         this.colorBitmap.Lock();
 
@@ -375,9 +377,7 @@ namespace ColorBasics
         {
             PrivateFontCollection privateFont = new PrivateFontCollection();
             privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
-            simp = new Font(privateFont.Families[0], 108,
-                                 System.Drawing.FontStyle.Regular,
-                                 GraphicsUnit.Pixel);
+            simp = new Font(privateFont.Families[0], 108, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
             DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
 
@@ -423,7 +423,7 @@ namespace ColorBasics
             }
         }
 
-
+        #region Audio recognition
         private static RecognizerInfo GetKinectRecognizer()
         {
             Debug.WriteLine("In Get");
@@ -486,49 +486,14 @@ namespace ColorBasics
             
         }
 
-        private void DrawLetter(String letter)
-        {
-            DrawText(letter, System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
-        }
-
-        private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
-        {
-            //first, create a dummy bitmap just to get a graphics object
-            Image img = new Bitmap(1, 1);
-            Graphics drawing = Graphics.FromImage(img);
-
-            //measure the string to see how big the image needs to be
-            SizeF textSize = drawing.MeasureString(text, simp);
-
-            //free up the dummy image and old graphics object
-            img.Dispose();
-            drawing.Dispose();
-
-            //create a new image of the right size
-            img = new Bitmap((int)textSize.Width, (int)textSize.Height);
-
-            drawing = Graphics.FromImage(img);
-
-            //paint the background
-            drawing.Clear(backColor);
-
-            //create a brush for the text
-            System.Drawing.Brush textBrush = new SolidBrush(textColor);
-
-            drawing.DrawString(text, simp, textBrush, 0, 0);
-
-            drawing.Save();
-
-            textBrush.Dispose();
-            drawing.Dispose();
-
-            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
-            return img;
-
-        }
-
         private void Reader_AudioFrameArrived(object sender, AudioBeamFrameArrivedEventArgs e)
         {
+            if (!readyToDrawNewSymbol)
+            {
+                // Discard latest audio frames in case the player is still busy drawing earlier figures
+                return;
+            }
+
             AudioBeamFrameReference frameReference = e.FrameReference;
             AudioBeamFrameList frameList = frameReference.AcquireBeamFrames();
 
@@ -557,6 +522,70 @@ namespace ColorBasics
             }
         }
 
+        private void SpeechToText_TextReceived(object sender, SpeechToText.RecognizedTextArgs args)
+        {
+            if (null == args.Text)
+            {
+                return;
+            }
+
+            // After receiving the text, translate it into Chinese
+            Console.WriteLine("Recognized text: " + args.Text);
+            string translation = TranslateText.Translate(args.Text);
+
+            if (null != translation)
+            {
+                lock (textOnScreenLock)
+                {
+                    textOnScreen = translation;
+                    readyToDrawNewSymbol = false;
+                }
+            }
+        }
+        #endregion
+
+        #region Letter drawing
+        private Image DrawLetter(String letter)
+        {
+            return DrawText(letter, System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
+        }
+
+        private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
+        {
+            PrivateFontCollection privateFont = new PrivateFontCollection();
+            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            Font font = new Font(privateFont.Families[0], 108, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
+
+            SizeF textSize;
+            Graphics graphics;
+            using (graphics = Graphics.FromHwnd(IntPtr.Zero))
+            {
+                //measure the string to see how big the image needs to be
+                textSize = graphics.MeasureString(text, font);
+            }
+
+            //create a new image of the right size
+            Bitmap img = new Bitmap((int)textSize.Width, (int)textSize.Height);
+
+            graphics = Graphics.FromImage(img);
+
+            //paint the background
+            graphics.Clear(backColor);
+
+            //create a brush for the text
+            System.Drawing.Brush textBrush = new SolidBrush(textColor);
+
+            graphics.DrawString(text, font, textBrush, 0, 0);
+            graphics.Save();
+
+            textBrush.Dispose();
+            graphics.Dispose();
+
+            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
+            return img;
+
+        }
+        #endregion
     }
 
 }
