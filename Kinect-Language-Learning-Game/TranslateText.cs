@@ -6,7 +6,7 @@ namespace ColorBasics
 {
     public class TranslateText
     {
-        private static string SubscriptionKey = "insert key here";
+        private static string SubscriptionKey = "enter key here";
 
         private static string GetToken()
         {
