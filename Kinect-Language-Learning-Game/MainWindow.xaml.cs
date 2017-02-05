@@ -22,6 +22,7 @@ namespace ColorBasics
     using System.Drawing.Imaging;
     using System.Drawing.Text;
     using Microsoft.Samples.Kinect;
+    using System.Windows.Shapes;
 
 
 
@@ -56,7 +57,19 @@ namespace ColorBasics
         private object textOnScreenLock = new object();
         private string textOnScreen;
 
-        private Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> handJoints = new Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>>();
+        private Polygon[] leftIndexFingerLines = new Polygon[8];
+        private Polygon[] rightIndexFingerLines = new Polygon[8];
+        private SolidColorBrush[] playerBrushes = new SolidColorBrush[]
+        {
+            System.Windows.Media.Brushes.Red,
+            System.Windows.Media.Brushes.Green,
+            System.Windows.Media.Brushes.Blue,
+            System.Windows.Media.Brushes.Orange,
+            System.Windows.Media.Brushes.DarkGreen,
+            System.Windows.Media.Brushes.DarkMagenta,
+            System.Windows.Media.Brushes.Azure,
+            System.Windows.Media.Brushes.White
+        };
 
         /// <summary>
         /// Number of bytes in each Kinect audio stream sample (32-bit IEEE float).
@@ -155,57 +168,120 @@ namespace ColorBasics
                 dataReceived = true;
             }
 
-            lock (handJoints)
-            {
-                handJoints.Clear();
-            }
-
             if (!dataReceived)
             {
                 return;
             }
 
-            foreach (Body body in bodies)
+            for (int i=0; i<bodies.Length; i++)
             {
+                Body body = bodies[i];
                 if (!body.IsTracked)
                 {
+                    leftIndexFingerLines[i] = null;
+                    rightIndexFingerLines[i] = null;
                     continue;
                 }
 
-                // Map from camera coordinate system to color image
-                CameraSpacePoint[] jointPoints = new CameraSpacePoint[]
+                // Work on left finger
+                if (IsLeftHandTracked(body))
                 {
-                    body.Joints[JointType.HandLeft].Position,
-                    body.Joints[JointType.HandTipLeft].Position,
-                    body.Joints[JointType.HandRight].Position,
-                    body.Joints[JointType.HandTipRight].Position,
-                    body.Joints[JointType.ShoulderRight].Position
-                };
+                    ColorSpacePoint handTipLeftColorSpace = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandTipLeft].Position);
 
-                ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[jointPoints.Length];
-                this.coordinateMapper.MapCameraPointsToColorSpace(jointPoints, colorSpacePoints);
+                    Polygon polygon = null;
+                    if (null == leftIndexFingerLines[i])
+                    {
+                        polygon = new Polygon();
+                        polygon.Stroke = playerBrushes[i];
+                        polygon.Opacity = 0.3f;
+                        polygon.StrokeThickness = 20;
+                        leftIndexFingerLines[i] = polygon;
+                    }
+                    else
+                    {
+                        polygon = leftIndexFingerLines[i];
+                    }
 
-                lock (handJoints)
+                    polygon.Points.Add(new System.Windows.Point(handTipLeftColorSpace.X, handTipLeftColorSpace.Y));
+
+                    if (polygon.Points.Count >= 5)
+                    {
+                        canvas.Children.Add(polygon);
+                        leftIndexFingerLines[i] = new Polygon();
+                        leftIndexFingerLines[i].Stroke = playerBrushes[i];
+                        leftIndexFingerLines[i].Opacity = 0.3f;
+                        leftIndexFingerLines[i].StrokeThickness = 20;
+                        leftIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipLeftColorSpace.X, handTipLeftColorSpace.Y));
+                    }
+                }
+                else
                 {
-                    handJoints[JointType.HandLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[0], colorSpacePoints[0]);
-                    handJoints[JointType.HandTipLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[1], colorSpacePoints[1]);
-                    handJoints[JointType.HandRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[2], colorSpacePoints[2]);
-                    handJoints[JointType.HandTipRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[3], colorSpacePoints[3]);
-                    handJoints[JointType.ShoulderRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[4], colorSpacePoints[4]);
+                    Polygon polygon = leftIndexFingerLines[i];
+                    if (null != polygon)
+                    {
+                        // End and draw polygon
+                        canvas.Children.Add(polygon);
+                        leftIndexFingerLines[i] = null;
+                    }
                 }
 
-                // Console.WriteLine(handJoints[JointType.HandRight].Item1.X + ", " + handJoints[JointType.HandRight].Item1.Y + ", " + handJoints[JointType.HandRight].Item1.Z);
-                Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
-                float x = handJoints[JointType.HandRight].Item2.X;
-                float y = handJoints[JointType.HandRight].Item2.Y;
-                float z = handJoints[JointType.HandRight].Item1.Z;
-                float pivot = handJoints[JointType.ShoulderRight].Item1.Z;
 
-                if (pivot - z >= 0.3)
+                // Work on right finger
+                if (IsRightHandTracked(body))
                 {
-                    trail.Points.Add(new System.Windows.Point { X = x, Y = y });
+                    ColorSpacePoint handTipRightColorSpace = coordinateMapper.MapCameraPointToColorSpace(body.Joints[JointType.HandTipRight].Position);
+                    Polygon polygon = null;
+                    if (null == rightIndexFingerLines[i])
+                    {
+                        polygon = new Polygon();
+                        polygon.Stroke = playerBrushes[i];
+                        polygon.Opacity = 0.3f;
+                        polygon.StrokeThickness = 20;
+                        rightIndexFingerLines[i] = polygon;
+                    }
+                    else
+                    {
+                        polygon = rightIndexFingerLines[i];
+                    }
+
+                    polygon.Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
+
+                    if (polygon.Points.Count >= 5)
+                    {
+                        canvas.Children.Add(polygon);
+                        rightIndexFingerLines[i] = new Polygon();
+                        rightIndexFingerLines[i].Stroke = playerBrushes[i];
+                        rightIndexFingerLines[i].Opacity = 0.3f;
+                        rightIndexFingerLines[i].StrokeThickness = 20;
+                        rightIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
+                    }
+                }
+                else
+                {
+                    Polygon polygon = rightIndexFingerLines[i];
+                    if (null != polygon)
+                    {
+                        // End and draw polygon
+                        canvas.Children.Add(polygon);
+                        rightIndexFingerLines[i] = null;
+                    }
                 }
             }
+        }
+
+        private bool IsLeftHandTracked(Body body)
+        {
+            return IsHandTracked(body.Joints[JointType.HandTipLeft], body.Joints[JointType.ShoulderLeft]);
+        }
+
+        private bool IsRightHandTracked(Body body)
+        {
+            return IsHandTracked(body.Joints[JointType.HandTipRight], body.Joints[JointType.ShoulderRight]);
+        }
+
+        private bool IsHandTracked(Joint handTip, Joint shoulderTip, float minZDistance=0.4f)
+        {
+            return handTip.TrackingState == TrackingState.Tracked && Math.Abs(handTip.Position.Z - shoulderTip.Position.Z) > minZDistance;
         }
 
         /// <summary>
@@ -289,7 +365,7 @@ namespace ColorBasics
                             bitmap = new Bitmap(colorFrameDescription.Width, colorFrameDescription.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                         }
 
-                        BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                        BitmapData bmpData = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                         colorFrame.CopyConvertedFrameDataToIntPtr(bmpData.Scan0,
                                 (uint)(colorFrameDescription.Width * colorFrameDescription.Height * 4),
                                 ColorImageFormat.Bgra);
@@ -297,16 +373,6 @@ namespace ColorBasics
                         bitmap.UnlockBits(bmpData);
 
                         Graphics graphics = Graphics.FromImage(bitmap);
-
-                        lock (handJoints)
-                        {
-                            foreach (KeyValuePair<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> pair in handJoints)
-                            {
-                                float x = pair.Value.Item2.X;
-                                float y = pair.Value.Item2.Y;
-                                graphics.DrawEllipse(new System.Drawing.Pen(System.Drawing.Color.Red, 5), x, y, 10, 10);
-                            }
-                        }
 
                         if (null != textOnScreen)
                         {
@@ -346,7 +412,7 @@ namespace ColorBasics
                         // verify data and write the new color frame data to the display bitmap
                         if ((colorFrameDescription.Width == bitmap.Width) && (colorFrameDescription.Height == bitmap.Height))
                         {
-                            bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                            bmpData = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                             colorBitmap.WritePixels(new Int32Rect(0, 0, colorFrameDescription.Width, colorFrameDescription.Height), bmpData.Scan0, bmpData.Stride * bmpData.Width, bmpData.Stride);
                             bitmap.UnlockBits(bmpData);
                             this.colorBitmap.AddDirtyRect(new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight));
@@ -376,7 +442,7 @@ namespace ColorBasics
         private void WindowLoaded(object sender, RoutedEventArgs e)
         {
             PrivateFontCollection privateFont = new PrivateFontCollection();
-            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            privateFont.AddFontFile(System.IO.Path.Combine(Environment.CurrentDirectory, "font.ttf"));
             simp = new Font(privateFont.Families[0], 108, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
             DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
@@ -553,7 +619,7 @@ namespace ColorBasics
         private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
         {
             PrivateFontCollection privateFont = new PrivateFontCollection();
-            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            privateFont.AddFontFile(System.IO.Path.Combine(Environment.CurrentDirectory, "font.ttf"));
             Font font = new Font(privateFont.Families[0], 108, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
             SizeF textSize;
@@ -581,7 +647,7 @@ namespace ColorBasics
             textBrush.Dispose();
             graphics.Dispose();
 
-            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
+            img.Save(System.IO.Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
             return img;
 
         }

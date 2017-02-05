@@ -15,11 +15,13 @@
             <Image Source="{Binding ImageSource}" />
             <Canvas Name="canvas">
                 <local:DrawingBrush x:Name="brush" Width="300" Height="300" />
+                <!--
                 <Polyline Name="trail" Stroke="Black" StrokeThickness="25">
                     <Polyline.Effect>
                         <BlurEffect Radius="5" />
                     </Polyline.Effect>
                 </Polyline>
+                -->
             </Canvas>
         </Grid>
     </Viewbox>
