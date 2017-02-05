@@ -1,10 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Runtime.Serialization.Json;
-using System.Runtime.Serialization;
-using System.Web;
-using System.Media;
 
 namespace Microsoft.Samples.Kinect.ColorBasics
 {
@@ -14,16 +10,16 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private static string GetToken()
         {
-            string uri = "https://api.cognitive.microsoft.com/sts/v1.0/issueToken?Subscription-Key=" + subscriptionKey;
+            string uri = "https://api.cognitive.microsoft.com/sts/v1.0/issueToken?Subscription-Key=" + SubscriptionKey;
             HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(uri);
             httpWebRequest.Method = "POST";
             httpWebRequest.ContentLength = 0;
 
             try
             {
-                using (HttpWebResponse response = httpWebRequest.GetResponse())
+                using (HttpWebResponse response = (HttpWebResponse) httpWebRequest.GetResponse())
                 {
-                    if (200 != response.StatusCode)
+                    if (HttpStatusCode.OK != response.StatusCode)
                     {
                         return null;
                     }
@@ -52,14 +48,14 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             }
 
             string from = "en";
-            string to = "zh";
+            string to = "zh";   
             string uri = "http://api.microsofttranslator.com/v2/Http.svc/Translate?" + "from=" + from + "&to=" + to + "&contentType=text/plain&text=" + System.Web.HttpUtility.UrlEncode(text);
             HttpWebRequest httpWebRequest = (HttpWebRequest)WebRequest.Create(uri);
             httpWebRequest.Headers.Add("Authorization", "Bearer " + authToken);
             HttpWebResponse response = null;
             try
             {
-                response = httpWebRequest.GetResponse();
+                response = (HttpWebResponse) httpWebRequest.GetResponse();
                 using (Stream stream = response.GetResponseStream())
                 {
                     System.Runtime.Serialization.DataContractSerializer dcs = new System.Runtime.Serialization.DataContractSerializer(Type.GetType("System.String"));
