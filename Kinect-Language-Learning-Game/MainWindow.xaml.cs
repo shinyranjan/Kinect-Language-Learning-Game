@@ -50,6 +50,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private Bitmap bitmap;
 
+        private SpeechToText speechToText;
+
         // TODO lock access to this
         private Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> handJoints = new Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>>();
 
@@ -94,6 +96,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             // create the bitmap to display
             this.colorBitmap = new WriteableBitmap(colorFrameDescription.Width, colorFrameDescription.Height, 96.0, 96.0, PixelFormats.Bgr32, null);
 
+            speechToText = new SpeechToText();
+            speechToText.TextReceived += SpeechToText_TextReceived;
+
             // set IsAvailableChanged event notifier
             this.kinectSensor.IsAvailableChanged += this.Sensor_IsAvailableChanged;
 
@@ -112,6 +117,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             
 
+        }
+
+        private void SpeechToText_TextReceived(object sender, SpeechToText.RecognizedTextArgs args)
+        {
+            Console.WriteLine("Recognized text: " + args.Text);
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -413,7 +423,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                 speechEngine.RecognizeAsync(RecognizeMode.Multiple);
 
-                
+                byte[] buffer = new byte[2048];
+                this.audioStream.Read(buffer, 0, 2048);
+                speechToText.SendBytes(buffer);
             }
             else
             {
