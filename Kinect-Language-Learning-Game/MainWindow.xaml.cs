@@ -37,6 +37,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private CoordinateMapper coordinateMapper = null;
 
+        private Bitmap bitmap;
+
         // TODO lock access to this
         private Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> handJoints = new Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>>();
 
@@ -253,6 +255,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <param name="e">event arguments</param>
         private void Reader_ColorFrameArrived(object sender, ColorFrameArrivedEventArgs e)
         {
+
             // ColorFrame is IDisposable
             using (ColorFrame colorFrame = e.FrameReference.AcquireFrame())
             {
@@ -262,7 +265,10 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
                     using (KinectBuffer colorBuffer = colorFrame.LockRawImageBuffer())
                     {
-                        Bitmap bitmap = new Bitmap(colorFrameDescription.Width, colorFrameDescription.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                        if (null == bitmap || colorFrameDescription.Width != bitmap.Width || colorFrameDescription.Height != bitmap.Height)
+                        {
+                            bitmap = new Bitmap(colorFrameDescription.Width, colorFrameDescription.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                        }
 
                         BitmapData bmpData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                         colorFrame.CopyConvertedFrameDataToIntPtr(bmpData.Scan0,
