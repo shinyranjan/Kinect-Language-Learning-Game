@@ -113,6 +113,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 dataReceived = true;
             }
 
+            lock (handJoints)
+            {
+                handJoints.Clear();
+            }
+
             if (!dataReceived)
             {
                 return;
@@ -289,6 +294,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                             }
                         }
 
+                        Font drawFont = new Font("Microsoft JhengHei", 120);
+                        SolidBrush drawBrush = new SolidBrush(System.Drawing.Color.FromArgb(128, System.Drawing.Color.Red));
+                        //graphics.DrawString("\u22823\u23478\u22909", drawFont, drawBrush, new RectangleF(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 200, 100));
+                        graphics.DrawString("剪贴画和多媒体", drawFont, drawBrush, new RectangleF(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 400, 400));
+
                         this.colorBitmap.Lock();
 
                         // verify data and write the new color frame data to the display bitmap
@@ -298,7 +308,6 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                             colorBitmap.WritePixels(new Int32Rect(0, 0, colorFrameDescription.Width, colorFrameDescription.Height), bmpData.Scan0, bmpData.Stride * bmpData.Width, bmpData.Stride);
                             bitmap.UnlockBits(bmpData);
                             this.colorBitmap.AddDirtyRect(new Int32Rect(0, 0, this.colorBitmap.PixelWidth, this.colorBitmap.PixelHeight));
-
                         }
 
                         this.colorBitmap.Unlock();
