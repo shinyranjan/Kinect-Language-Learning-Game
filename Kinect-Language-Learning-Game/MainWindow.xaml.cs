@@ -20,6 +20,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
+    using System.Drawing.Text;
+
 
 
     /// <summary>
@@ -64,6 +66,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private FileStream fileStream;
 
         int rec_time = 2 * 16000;
+        private Font simp;
+
         /// <summary>
         /// Initializes a new instance of the MainWindow class.
         /// </summary>
@@ -350,6 +354,14 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// <param name="e">event arguments</param>
         private void WindowLoaded(object sender, RoutedEventArgs e)
         {
+            PrivateFontCollection privateFont = new PrivateFontCollection();
+            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            simp = new Font(privateFont.Families[0], 108,
+                                 System.Drawing.FontStyle.Regular,
+                                 GraphicsUnit.Pixel);
+
+            DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
+
             if (this.kinectSensor != null)
             {
                 // grab the audio stream
@@ -455,6 +467,47 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             this.reading = false;
             
+        }
+
+        private void DrawLetter(String letter)
+        {
+            DrawText(letter, System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
+        }
+
+        private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
+        {
+            //first, create a dummy bitmap just to get a graphics object
+            Image img = new Bitmap(1, 1);
+            Graphics drawing = Graphics.FromImage(img);
+
+            //measure the string to see how big the image needs to be
+            SizeF textSize = drawing.MeasureString(text, simp);
+
+            //free up the dummy image and old graphics object
+            img.Dispose();
+            drawing.Dispose();
+
+            //create a new image of the right size
+            img = new Bitmap((int)textSize.Width, (int)textSize.Height);
+
+            drawing = Graphics.FromImage(img);
+
+            //paint the background
+            drawing.Clear(backColor);
+
+            //create a brush for the text
+            System.Drawing.Brush textBrush = new SolidBrush(textColor);
+
+            drawing.DrawString(text, simp, textBrush, 0, 0);
+
+            drawing.Save();
+
+            textBrush.Dispose();
+            drawing.Dispose();
+
+            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
+            return img;
+
         }
 
     }
