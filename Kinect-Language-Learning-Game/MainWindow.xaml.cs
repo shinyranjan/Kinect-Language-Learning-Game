@@ -14,9 +14,15 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
+    using Microsoft.Speech.AudioFormat;
+    using Microsoft.Speech.Recognition;
+    using System.Threading;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
+    using System.Drawing.Text;
+
+
 
     /// <summary>
     /// Interaction logic for MainWindow
@@ -27,6 +33,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// Active Kinect sensor
         /// </summary>
         private KinectSensor kinectSensor = null;
+
+
+        private SpeechRecognitionEngine speechEngine = null;
+
+        private KinectAudioStream audioStream = null;
 
         /// <summary>
         /// Reader for color frames
@@ -51,6 +62,13 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// Current status text to display
         /// </summary>
         private string statusText = null;
+
+        private bool reading;
+        private Thread readingThread;
+        private FileStream fileStream;
+
+        int rec_time = 2 * 16000;
+        private Font simp;
 
         /// <summary>
         /// Initializes a new instance of the MainWindow class.
@@ -91,6 +109,9 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
+
+            
+
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -212,6 +233,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 this.kinectSensor.Close();
                 this.kinectSensor = null;
             }
+
+            if (null != this.audioStream)
+            {
+                this.audioStream.SpeechActive = false;
+            }
+
+            if (null != this.speechEngine)
+            {
+                this.speechEngine.SpeechRecognized -= this.SpeechRecognized;
+                this.speechEngine.SpeechRecognitionRejected -= this.SpeechRejected;
+                this.speechEngine.RecognizeAsyncStop();
+            }
+
         }
 
         /// <summary>
@@ -327,5 +361,173 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
                                                             : Properties.Resources.SensorNotAvailableStatusText;
         }
+
+        /// <summary>
+        /// Execute initialization tasks.
+        /// </summary>
+        /// <param name="sender">object sending the event</param>
+        /// <param name="e">event arguments</param>
+        private void WindowLoaded(object sender, RoutedEventArgs e)
+        {
+            PrivateFontCollection privateFont = new PrivateFontCollection();
+            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            simp = new Font(privateFont.Families[0], 108,
+                                 System.Drawing.FontStyle.Regular,
+                                 GraphicsUnit.Pixel);
+
+            DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
+
+            if (this.kinectSensor != null)
+            {
+                // grab the audio stream
+                System.Collections.Generic.IReadOnlyList<AudioBeam> audioBeamList = this.kinectSensor.AudioSource.AudioBeams;
+                System.IO.Stream audioStream = audioBeamList[0].OpenInputStream();
+
+                // create the convert stream
+                this.audioStream = new KinectAudioStream(audioStream);
+            }
+
+            RecognizerInfo ri = GetKinectRecognizer();
+
+            if (null != ri)
+            {
+                this.speechEngine = new SpeechRecognitionEngine(ri.Id);
+
+
+                var keyword = new Choices();
+                keyword.Add(new SemanticResultValue("draw", 1));
+
+                var gb = new GrammarBuilder { Culture = ri.Culture };
+                gb.Append(keyword);
+                var g = new Grammar(gb);
+                speechEngine.LoadGrammar(g);
+
+                speechEngine.SpeechRecognized += this.SpeechRecognized;
+                speechEngine.SpeechRecognitionRejected += this.SpeechRejected;
+
+                // let the convertStream know speech is going active
+                this.audioStream.SpeechActive = true;
+
+                speechEngine.SetInputToAudioStream(
+                    this.audioStream, new SpeechAudioFormatInfo(EncodingFormat.Pcm, 16000, 16, 1, 32000, 2, null));
+
+                speechEngine.RecognizeAsync(RecognizeMode.Multiple);
+
+                
+            }
+            else
+            {
+                Debug.WriteLine("No recognizer");
+            }
+        }
+
+
+        private static RecognizerInfo GetKinectRecognizer()
+        {
+            Debug.WriteLine("In Get");
+            foreach (RecognizerInfo recognizer in SpeechRecognitionEngine.InstalledRecognizers())
+            {
+                Debug.WriteLine("In For");
+                string value;
+                recognizer.AdditionalInfo.TryGetValue("Kinect", out value);
+                if ("True".Equals(value, StringComparison.OrdinalIgnoreCase) && "en-US".Equals(recognizer.Culture.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return recognizer;
+                }
+            }
+
+            return null;
+        }
+        /// <summary>
+        /// Handler for rejected speech events.
+        /// </summary>
+        /// <param name="sender">object sending the event.</param>
+        /// <param name="e">event arguments.</param>
+        private void SpeechRejected(object sender, SpeechRecognitionRejectedEventArgs e)
+        {
+            
+        }
+
+        /// <summary>
+        /// Handler for rejected speech events.
+        /// </summary>
+        /// <param name="sender">object sending the event.</param>
+        /// <param name="e">event arguments.</param>
+        private void SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
+        {
+            
+            // Speech utterance confidence below which we treat speech as if it hadn't been heard
+            const double ConfidenceThreshold = 0.3;
+
+            if (!reading && e.Result.Confidence >= ConfidenceThreshold)
+            {
+                Debug.WriteLine("Matched");
+
+                this.reading = true;
+                this.readingThread = new Thread(AudioTranslationThread);
+                this.readingThread.Start();
+            }
+        }
+
+        private void AudioTranslationThread()
+        {
+
+            byte[] audioBuffer = new byte[rec_time];
+
+            Debug.WriteLine("Recording");
+            int readCount = audioStream.Read(audioBuffer, 0, audioBuffer.Length);
+            Debug.WriteLine("Done");
+
+            //TODO Recognition and Translation
+
+            this.reading = false;
+            
+        }
+
+        private void DrawLetter(String letter)
+        {
+            DrawText(letter, System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
+        }
+
+        private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
+        {
+            //first, create a dummy bitmap just to get a graphics object
+            Image img = new Bitmap(1, 1);
+            Graphics drawing = Graphics.FromImage(img);
+
+            //measure the string to see how big the image needs to be
+            SizeF textSize = drawing.MeasureString(text, simp);
+
+            //free up the dummy image and old graphics object
+            img.Dispose();
+            drawing.Dispose();
+
+            //create a new image of the right size
+            img = new Bitmap((int)textSize.Width, (int)textSize.Height);
+
+            drawing = Graphics.FromImage(img);
+
+            //paint the background
+            drawing.Clear(backColor);
+
+            //create a brush for the text
+            System.Drawing.Brush textBrush = new SolidBrush(textColor);
+
+            drawing.DrawString(text, simp, textBrush, 0, 0);
+
+            drawing.Save();
+
+            textBrush.Dispose();
+            drawing.Dispose();
+
+            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
+            return img;
+
+        }
+
     }
+
 }
+
+
+
