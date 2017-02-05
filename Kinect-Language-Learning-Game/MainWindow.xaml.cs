@@ -3,7 +3,7 @@
 //     Copyright (c) Microsoft Corporation.  All rights reserved.
 // </copyright>
 //------------------------------------------------------------------------------
-namespace Microsoft.Samples.Kinect.ColorBasics
+namespace ColorBasics
 {
     using System;
     using System.ComponentModel;
@@ -139,7 +139,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 return;
             }
 
-            foreach(Body body in bodies)
+            foreach (Body body in bodies)
             {
                 if (!body.IsTracked)
                 {
@@ -152,7 +152,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     body.Joints[JointType.HandLeft].Position,
                     body.Joints[JointType.HandTipLeft].Position,
                     body.Joints[JointType.HandRight].Position,
-                    body.Joints[JointType.HandTipRight].Position
+                    body.Joints[JointType.HandTipRight].Position,
+                    body.Joints[JointType.ShoulderRight].Position
                 };
 
                 ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[jointPoints.Length];
@@ -164,6 +165,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     handJoints[JointType.HandTipLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[1], colorSpacePoints[1]);
                     handJoints[JointType.HandRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[2], colorSpacePoints[2]);
                     handJoints[JointType.HandTipRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[3], colorSpacePoints[3]);
+                    handJoints[JointType.ShoulderRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[4], colorSpacePoints[4]);
+                }
+
+                // Console.WriteLine(handJoints[JointType.HandRight].Item1.X + ", " + handJoints[JointType.HandRight].Item1.Y + ", " + handJoints[JointType.HandRight].Item1.Z);
+                Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
+                float x = handJoints[JointType.HandRight].Item2.X;
+                float y = handJoints[JointType.HandRight].Item2.Y;
+                float z = handJoints[JointType.HandRight].Item1.Z;
+                float pivot = handJoints[JointType.ShoulderRight].Item1.Z;
+
+                if (pivot - z >= 0.3)
+                {
+                    trail.Points.Add(new System.Windows.Point { X = x, Y = y });
                 }
             }
         }
