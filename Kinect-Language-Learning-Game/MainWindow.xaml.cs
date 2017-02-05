@@ -23,6 +23,8 @@ namespace ColorBasics
     using System.Drawing.Text;
     using Microsoft.Samples.Kinect;
     using System.Windows.Shapes;
+    using System.Reflection;
+    using System.Windows.Interop;
 
 
 
@@ -97,8 +99,8 @@ namespace ColorBasics
 
         private bool readyToDrawNewSymbol = true;
         private Image currentlyDisplayedSymbol = null;
-
-        private Thread readingThread;
+        private bool redraw = false;
+        private Stopwatch stopwatch = new Stopwatch();
 
         int rec_time = 2 * 16000;
         private Font simp;
@@ -187,6 +189,11 @@ namespace ColorBasics
                     continue;
                 }
 
+                float opacity = 0.5f;
+                int strokeThickness = 10;
+
+                
+
                 // Work on left finger
                 if (IsLeftHandTracked(body))
                 {
@@ -197,8 +204,10 @@ namespace ColorBasics
                     {
                         polygon = new Polygon();
                         polygon.Stroke = playerBrushes[i];
-                        polygon.Opacity = 0.3f;
-                        polygon.StrokeThickness = 20;
+                        polygon.Opacity = opacity;
+                        polygon.StrokeThickness = strokeThickness;
+                        polygon.HorizontalAlignment = HorizontalAlignment.Left;
+                        polygon.VerticalAlignment = VerticalAlignment.Center;
                         leftIndexFingerLines[i] = polygon;
                     }
                     else
@@ -211,10 +220,13 @@ namespace ColorBasics
                     if (polygon.Points.Count >= 5)
                     {
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         leftIndexFingerLines[i] = new Polygon();
                         leftIndexFingerLines[i].Stroke = playerBrushes[i];
-                        leftIndexFingerLines[i].Opacity = 0.3f;
-                        leftIndexFingerLines[i].StrokeThickness = 20;
+                        leftIndexFingerLines[i].Opacity = opacity;
+                        leftIndexFingerLines[i].StrokeThickness = strokeThickness;
+                        leftIndexFingerLines[i].HorizontalAlignment = HorizontalAlignment.Left;
+                        leftIndexFingerLines[i].VerticalAlignment = VerticalAlignment.Center;
                         leftIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipLeftColorSpace.X, handTipLeftColorSpace.Y));
                     }
                 }
@@ -225,6 +237,7 @@ namespace ColorBasics
                     {
                         // End and draw polygon
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         leftIndexFingerLines[i] = null;
                     }
                 }
@@ -239,8 +252,8 @@ namespace ColorBasics
                     {
                         polygon = new Polygon();
                         polygon.Stroke = playerBrushes[i];
-                        polygon.Opacity = 0.3f;
-                        polygon.StrokeThickness = 20;
+                        polygon.Opacity = opacity;
+                        polygon.StrokeThickness = strokeThickness;
                         rightIndexFingerLines[i] = polygon;
                     }
                     else
@@ -253,10 +266,13 @@ namespace ColorBasics
                     if (polygon.Points.Count >= 5)
                     {
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         rightIndexFingerLines[i] = new Polygon();
                         rightIndexFingerLines[i].Stroke = playerBrushes[i];
-                        rightIndexFingerLines[i].Opacity = 0.3f;
-                        rightIndexFingerLines[i].StrokeThickness = 20;
+                        rightIndexFingerLines[i].Opacity = opacity;
+                        rightIndexFingerLines[i].StrokeThickness = strokeThickness;
+                        rightIndexFingerLines[i].HorizontalAlignment = HorizontalAlignment.Left;
+                        rightIndexFingerLines[i].VerticalAlignment = VerticalAlignment.Center;
                         rightIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
                     }
                 }
@@ -267,6 +283,7 @@ namespace ColorBasics
                     {
                         // End and draw polygon
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         rightIndexFingerLines[i] = null;
                     }
                 }
@@ -378,7 +395,7 @@ namespace ColorBasics
 
                         Graphics graphics = Graphics.FromImage(bitmap);
 
-                        if (null != textOnScreen)
+                        if (null != textOnScreen && redraw)
                         {
                             lock (textOnScreenLock)
                             {
@@ -386,15 +403,27 @@ namespace ColorBasics
                                 if (null != textOnScreen)
                                 {
                                     currentlyDisplayedSymbol = DrawLetter(textOnScreen);
-                                    byte[] imgArray = (byte[])converter.ConvertTo(currentlyDisplayedSymbol, typeof(byte[]));
+                                    var bitmap = new System.Drawing.Bitmap(currentlyDisplayedSymbol);
+                                    var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(bitmap.GetHbitmap(),
+                                                                                                          IntPtr.Zero,
+                                                                                                          Int32Rect.Empty,
+                                                                                                          BitmapSizeOptions.FromEmptyOptions()
+                                          );
+                                    bitmap.Dispose();
+
+                                    int symbolWidth = currentlyDisplayedSymbol.Width;
+                                    int symbolHeight = currentlyDisplayedSymbol.Height;
+                                    int symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
+                                    int symbolYPosition = colorFrameDescription.Height / 2 - symbolHeight / 2;
+
+                                    System.Windows.Controls.Canvas.SetTop(Template, symbolYPosition);
+                                    System.Windows.Controls.Canvas.SetLeft(Template, symbolXPosition);
+                                    Template.Width = symbolWidth;
+                                    Template.Height = symbolHeight;
+                                    Template.Fill = new ImageBrush(bitmapSource);
+                                    redraw = false;
                                 }
                             }
-
-                            int symbolWidth = currentlyDisplayedSymbol.Width;
-                            int symbolHeight = currentlyDisplayedSymbol.Height;
-                            int symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
-                            int symbolYPosition = colorFrameDescription.Height / 4;
-                            graphics.DrawImage(currentlyDisplayedSymbol, symbolXPosition, symbolYPosition);
                         }
                                              
 
@@ -427,8 +456,26 @@ namespace ColorBasics
                         this.colorBitmap.Unlock();
                     }
                 }
+
+                if (stopwatch.ElapsedMilliseconds >= 15000)
+                {
+                    readyToDrawNewSymbol = true;
+                    if (canvas.Children.Count > 2)
+                    {
+                        canvas.Children.RemoveRange(2, canvas.Children.Count - 1);
+                    }
+                    Template.Fill = System.Windows.Media.Brushes.Transparent;
+                }
             }
         }
+
+        private float percentageComplete()
+        {
+            //Template.Fill.
+            //    currentlyDisplayedImage
+            return 0.0f;
+        }
+
 
         /// <summary>
         /// Handles the event which the sensor becomes unavailable (E.g. paused, closed, unplugged).
@@ -495,6 +542,8 @@ namespace ColorBasics
             {
                 Debug.WriteLine("No recognizer");
             }
+
+            stopwatch.Start();
         }
 
         #region Audio recognition
@@ -542,6 +591,7 @@ namespace ColorBasics
                 textOnScreen = null;
                 currentlyDisplayedSymbol = null;
                 readyToDrawNewSymbol = true;
+                redraw = true;
             }
         }
 
@@ -629,10 +679,16 @@ namespace ColorBasics
             {
                 translation = translation.Replace("。", "");
 
+                // Limit to maximum 2 chars
+                int startIndex = Math.Max(0, translation.Length - 2);
+                translation = translation.Substring(startIndex, Math.Min(2, translation.Length - startIndex));
+
                 lock (textOnScreenLock)
                 {
                     textOnScreen = translation;
                     readyToDrawNewSymbol = false;
+                    redraw = true;
+                    stopwatch.Restart();
                 }
             }
         }
@@ -649,7 +705,7 @@ namespace ColorBasics
             PrivateFontCollection privateFont = new PrivateFontCollection();
 
             privateFont.AddFontFile(System.IO.Path.Combine(Environment.CurrentDirectory, "font.ttf"));
-            Font font = new Font(privateFont.Families[0], 324, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
+            Font font = new Font(privateFont.Families[0], 500, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
 
             SizeF textSize;
