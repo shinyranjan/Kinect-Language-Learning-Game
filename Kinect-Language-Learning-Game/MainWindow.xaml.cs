@@ -28,7 +28,7 @@ namespace ColorBasics
     /// <summary>
     /// Interaction logic for MainWindow
     /// </summary>
-    public partial class MainWindow : Window, INotifyPropertyChanged
+    public partial class MainWindow : Window
     {
         /// <summary>
         /// Active Kinect sensor
@@ -53,22 +53,34 @@ namespace ColorBasics
 
         private SpeechToText speechToText;
 
-        // TODO lock access to this
+        private object textOnScreenLock = new object();
+        private string textOnScreen;
+
         private Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> handJoints = new Dictionary<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>>();
+
+        /// <summary>
+        /// Number of bytes in each Kinect audio stream sample (32-bit IEEE float).
+        /// </summary>
+        private const int BytesPerAudioSample = sizeof(float);
+        /// <summary>
+        /// Will be allocated a buffer to hold a single sub frame of audio data read from audio stream.
+        /// </summary>
+        private readonly byte[] audioBuffer = null;
+        /// <summary>
+        /// Reader for audio frames
+        /// </summary>
+        private AudioBeamFrameReader audioBeamReader = null;
+        //private List<short> audioSamples;
+        private MemoryStream audioSnippet;
+        private int maxAudioSamples;
 
         /// <summary>
         /// Bitmap to display
         /// </summary>
         private WriteableBitmap colorBitmap = null;
 
-        /// <summary>
-        /// Current status text to display
-        /// </summary>
-        private string statusText = null;
-
         private bool reading;
         private Thread readingThread;
-        private FileStream fileStream;
 
         int rec_time = 2 * 16000;
         private Font simp;
@@ -83,12 +95,11 @@ namespace ColorBasics
 
             // open the reader for the color frames
             this.colorFrameReader = this.kinectSensor.ColorFrameSource.OpenReader();
+            this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
 
             this.bodyFrameReader = this.kinectSensor.BodyFrameSource.OpenReader();
             this.bodyFrameReader.FrameArrived += BodyFrameReader_FrameArrived;
 
-            // wire handler for frame arrival
-            this.colorFrameReader.FrameArrived += this.Reader_ColorFrameArrived;
             this.coordinateMapper = this.kinectSensor.CoordinateMapper;
 
             // create the colorFrameDescription from the ColorFrameSource using Bgra format
@@ -106,23 +117,39 @@ namespace ColorBasics
             // open the sensor
             this.kinectSensor.Open();
 
-            // set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
-                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.NoSensorStatusText;
-
             // use the window object as the view model in this simple example
             this.DataContext = this;
 
+            // Get its audio source
+            AudioSource audioSource = this.kinectSensor.AudioSource;
+            this.audioBuffer = new byte[audioSource.SubFrameLengthInBytes];
+            this.maxAudioSamples = (int)((audioSource.SubFrameLengthInBytes / sizeof(float)) * 512);
+            this.audioSnippet = new MemoryStream(maxAudioSamples * 2);
+            this.audioBeamReader = audioSource.OpenReader();
+            this.audioBeamReader.FrameArrived += this.Reader_AudioFrameArrived;
+
             // initialize the components (controls) of the window
             this.InitializeComponent();
-
-            
-
         }
 
         private void SpeechToText_TextReceived(object sender, SpeechToText.RecognizedTextArgs args)
         {
+            if (null == args.Text)
+            {
+                return;
+            }
+
+            // After receiving the text, translate it into Chinese
             Console.WriteLine("Recognized text: " + args.Text);
+            string translation = TranslateText.Translate(args.Text);
+
+            if (null != translation)
+            {
+                lock (textOnScreenLock)
+                {
+                    textOnScreen = translation;
+                }
+            }
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -199,11 +226,6 @@ namespace ColorBasics
         }
 
         /// <summary>
-        /// INotifyPropertyChangedPropertyChanged event to allow window controls to bind to changeable data
-        /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        /// <summary>
         /// Gets the bitmap to display
         /// </summary>
         public ImageSource ImageSource
@@ -211,31 +233,6 @@ namespace ColorBasics
             get
             {
                 return this.colorBitmap;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the current status text to display
-        /// </summary>
-        public string StatusText
-        {
-            get
-            {
-                return this.statusText;
-            }
-
-            set
-            {
-                if (this.statusText != value)
-                {
-                    this.statusText = value;
-
-                    // notify any bound elements that the text has changed
-                    if (this.PropertyChanged != null)
-                    {
-                        this.PropertyChanged(this, new PropertyChangedEventArgs("StatusText"));
-                    }
-                }
             }
         }
 
@@ -253,6 +250,12 @@ namespace ColorBasics
                 this.colorFrameReader = null;
             }
 
+            if (this.bodyFrameReader != null)
+            {
+                this.bodyFrameReader.Dispose();
+                this.bodyFrameReader = null;
+            }
+
             if (this.kinectSensor != null)
             {
                 this.kinectSensor.Close();
@@ -261,7 +264,15 @@ namespace ColorBasics
 
             if (null != this.audioStream)
             {
+                this.audioStream.Dispose();
+                this.audioStream = null;
                 this.audioStream.SpeechActive = false;
+            }
+
+            if (null != this.audioBeamReader)
+            {
+                this.audioBeamReader.Dispose();
+                this.audioBeamReader = null;
             }
 
             if (null != this.speechEngine)
@@ -271,45 +282,6 @@ namespace ColorBasics
                 this.speechEngine.RecognizeAsyncStop();
             }
 
-        }
-
-        /// <summary>
-        /// Handles the user clicking on the screenshot button
-        /// </summary>
-        /// <param name="sender">object sending the event</param>
-        /// <param name="e">event arguments</param>
-        private void ScreenshotButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (this.colorBitmap != null)
-            {
-                // create a png bitmap encoder which knows how to save a .png file
-                BitmapEncoder encoder = new PngBitmapEncoder();
-
-                // create frame from the writable bitmap and add to encoder
-                encoder.Frames.Add(BitmapFrame.Create(this.colorBitmap));
-
-                string time = System.DateTime.Now.ToString("hh'-'mm'-'ss", CultureInfo.CurrentUICulture.DateTimeFormat);
-
-                string myPhotos = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-
-                string path = Path.Combine(myPhotos, "KinectScreenshot-Color-" + time + ".png");
-
-                // write the new file to disk
-                try
-                {
-                    // FileStream is IDisposable
-                    using (FileStream fs = new FileStream(path, FileMode.Create))
-                    {
-                        encoder.Save(fs);
-                    }
-
-                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SavedScreenshotStatusTextFormat, path);
-                }
-                catch (IOException)
-                {
-                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.FailedScreenshotStatusTextFormat, path);
-                }
-            }
         }
 
         /// <summary>
@@ -353,10 +325,19 @@ namespace ColorBasics
                             }
                         }
 
-                        Font drawFont = new Font("Microsoft JhengHei", 120);
-                        SolidBrush drawBrush = new SolidBrush(System.Drawing.Color.FromArgb(128, System.Drawing.Color.Red));
-                        //graphics.DrawString("\u22823\u23478\u22909", drawFont, drawBrush, new RectangleF(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 200, 100));
-                        graphics.DrawString("剪贴画和多媒体", drawFont, drawBrush, new RectangleF(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 400, 400));
+                        using (Font drawFont = new Font("Microsoft JhengHei", 120))
+                        {
+                            using (SolidBrush drawBrush = new SolidBrush(System.Drawing.Color.FromArgb(128, System.Drawing.Color.Red)))
+                            {
+                                lock (textOnScreenLock)
+                                {
+                                    if (null != textOnScreen)
+                                    {
+                                        graphics.DrawString(textOnScreen, drawFont, drawBrush, new RectangleF(colorFrameDescription.Width / 2, colorFrameDescription.Height / 2, 400, 400));
+                                    }
+                                }
+                            }
+                        }
 
                         this.colorBitmap.Lock();
 
@@ -382,9 +363,7 @@ namespace ColorBasics
         /// <param name="e">event arguments</param>
         private void Sensor_IsAvailableChanged(object sender, IsAvailableChangedEventArgs e)
         {
-            // on failure, set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
-                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SensorNotAvailableStatusText;
+            // Do nothings
         }
 
         /// <summary>
@@ -437,10 +416,6 @@ namespace ColorBasics
                     this.audioStream, new SpeechAudioFormatInfo(EncodingFormat.Pcm, 16000, 16, 1, 32000, 2, null));
 
                 speechEngine.RecognizeAsync(RecognizeMode.Multiple);
-
-                byte[] buffer = new byte[2048];
-                this.audioStream.Read(buffer, 0, 2048);
-                speechToText.SendBytes(buffer);
             }
             else
             {
@@ -550,6 +525,36 @@ namespace ColorBasics
             img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
             return img;
 
+        }
+
+        private void Reader_AudioFrameArrived(object sender, AudioBeamFrameArrivedEventArgs e)
+        {
+            AudioBeamFrameReference frameReference = e.FrameReference;
+            AudioBeamFrameList frameList = frameReference.AcquireBeamFrames();
+
+            if (frameList != null)
+            {
+                BinaryWriter bw = new BinaryWriter(audioSnippet, System.Text.Encoding.ASCII, true);
+                using (frameList)
+                {
+                    IReadOnlyList<AudioBeamSubFrame> subFrameList = frameList[0].SubFrames;
+                    foreach (AudioBeamSubFrame subFrame in subFrameList)
+                    {
+                        subFrame.CopyFrameDataToArray(this.audioBuffer);
+                        for (int i = 0; i < this.audioBuffer.Length; i += BytesPerAudioSample)
+                        {
+                            float audioSample = BitConverter.ToSingle(this.audioBuffer, i);
+                            bw.Write((short)(audioSample * short.MaxValue));
+                        }
+                        if (audioSnippet.Position >= maxAudioSamples)
+                        {
+                            speechToText.SendBytes(audioSnippet.GetBuffer());
+                            audioSnippet.Seek(0, SeekOrigin.Begin);
+                        }
+                    }
+                }
+                bw.Close();
+            }
         }
 
     }

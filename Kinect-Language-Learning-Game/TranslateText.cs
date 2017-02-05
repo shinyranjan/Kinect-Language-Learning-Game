@@ -2,11 +2,11 @@
 using System.IO;
 using System.Net;
 
-namespace Microsoft.Samples.Kinect.ColorBasics
+namespace ColorBasics
 {
     public class TranslateText
     {
-        private static string SubscriptionKey = "<put your token here>";
+        private static string SubscriptionKey = "insert key here";
 
         private static string GetToken()
         {
