@@ -21,6 +21,7 @@ namespace ColorBasics
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Drawing.Text;
+    using Microsoft.Samples.Kinect;
 
 
 
@@ -101,8 +102,8 @@ namespace ColorBasics
             this.kinectSensor.Open();
 
             // set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.NoSensorStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.NoSensorStatusText;
 
             // use the window object as the view model in this simple example
             this.DataContext = this;
@@ -287,11 +288,11 @@ namespace ColorBasics
                         encoder.Save(fs);
                     }
 
-                    this.StatusText = string.Format(Properties.Resources.SavedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SavedScreenshotStatusTextFormat, path);
                 }
                 catch (IOException)
                 {
-                    this.StatusText = string.Format(Properties.Resources.FailedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.FailedScreenshotStatusTextFormat, path);
                 }
             }
         }
@@ -363,8 +364,8 @@ namespace ColorBasics
         private void Sensor_IsAvailableChanged(object sender, IsAvailableChangedEventArgs e)
         {
             // on failure, set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.SensorNotAvailableStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SensorNotAvailableStatusText;
         }
 
         /// <summary>
