@@ -374,12 +374,11 @@ namespace ColorBasics
         private void WindowLoaded(object sender, RoutedEventArgs e)
         {
             PrivateFontCollection privateFont = new PrivateFontCollection();
-            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
+            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.TTF"));
             simp = new Font(privateFont.Families[0], 108,
                                  System.Drawing.FontStyle.Regular,
                                  GraphicsUnit.Pixel);
 
-            DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
 
             if (this.kinectSensor != null)
             {
@@ -399,7 +398,7 @@ namespace ColorBasics
 
 
                 var keyword = new Choices();
-                keyword.Add(new SemanticResultValue("draw", 1));
+                keyword.Add(new SemanticResultValue("translate", 1));
 
                 var gb = new GrammarBuilder { Culture = ri.Culture };
                 gb.Append(keyword);
@@ -556,6 +555,12 @@ namespace ColorBasics
                 bw.Close();
             }
         }
+
+        private int update(int x, int y)
+        {
+            return 0;
+        }
+
 
     }
 
