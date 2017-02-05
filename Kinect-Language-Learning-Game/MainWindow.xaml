@@ -8,6 +8,7 @@
         Title="KINECT Drawing" Height="350" Width="525"
         WindowState="Maximized"
         Background="Black"
+        Loaded="WindowLoaded"
         Closing="MainWindow_Closing">
     <Viewbox>
         <Grid Width="1920" Height="1080">

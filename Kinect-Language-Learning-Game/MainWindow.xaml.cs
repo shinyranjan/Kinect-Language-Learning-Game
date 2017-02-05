@@ -38,7 +38,7 @@ namespace ColorBasics
 
         private SpeechRecognitionEngine speechEngine = null;
 
-        private KinectAudioStream audioStream = null;
+        private Kinect.KinectAudioStream audioStream = null;
 
         /// <summary>
         /// Reader for color frames
@@ -390,7 +390,7 @@ namespace ColorBasics
                 System.IO.Stream audioStream = audioBeamList[0].OpenInputStream();
 
                 // create the convert stream
-                this.audioStream = new KinectAudioStream(audioStream);
+                this.audioStream = new Kinect.KinectAudioStream(audioStream);
             }
 
             RecognizerInfo ri = GetKinectRecognizer();

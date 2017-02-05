@@ -13,16 +13,17 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace Microsoft.Samples.Kinect.ColorBasics
+namespace ColorBasics
 {
     /// <summary>
-    /// Interaction logic for Page1.xaml
+    /// Interaction logic for DrawingBrush.xaml
     /// </summary>
-    public partial class Page1 : Page
+    public partial class DrawingBrush : UserControl
     {
-        public Page1()
+        public DrawingBrush()
         {
             InitializeComponent();
         }
     }
 }
+
