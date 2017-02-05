@@ -3,7 +3,7 @@
 //     Copyright (c) Microsoft Corporation.  All rights reserved.
 // </copyright>
 //------------------------------------------------------------------------------
-namespace Microsoft.Samples.Kinect.ColorBasics
+namespace ColorBasics
 {
     using System;
     using System.ComponentModel;
@@ -21,6 +21,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Drawing.Text;
+    using Microsoft.Samples.Kinect;
 
 
 
@@ -37,7 +38,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
 
         private SpeechRecognitionEngine speechEngine = null;
 
-        private KinectAudioStream audioStream = null;
+        private Kinect.KinectAudioStream audioStream = null;
 
         /// <summary>
         /// Reader for color frames
@@ -106,8 +107,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.kinectSensor.Open();
 
             // set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.NoSensorStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.NoSensorStatusText;
 
             // use the window object as the view model in this simple example
             this.DataContext = this;
@@ -154,7 +155,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 return;
             }
 
-            foreach(Body body in bodies)
+            foreach (Body body in bodies)
             {
                 if (!body.IsTracked)
                 {
@@ -167,7 +168,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     body.Joints[JointType.HandLeft].Position,
                     body.Joints[JointType.HandTipLeft].Position,
                     body.Joints[JointType.HandRight].Position,
-                    body.Joints[JointType.HandTipRight].Position
+                    body.Joints[JointType.HandTipRight].Position,
+                    body.Joints[JointType.ShoulderRight].Position
                 };
 
                 ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[jointPoints.Length];
@@ -179,6 +181,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     handJoints[JointType.HandTipLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[1], colorSpacePoints[1]);
                     handJoints[JointType.HandRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[2], colorSpacePoints[2]);
                     handJoints[JointType.HandTipRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[3], colorSpacePoints[3]);
+                    handJoints[JointType.ShoulderRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[4], colorSpacePoints[4]);
+                }
+
+                // Console.WriteLine(handJoints[JointType.HandRight].Item1.X + ", " + handJoints[JointType.HandRight].Item1.Y + ", " + handJoints[JointType.HandRight].Item1.Z);
+                Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
+                float x = handJoints[JointType.HandRight].Item2.X;
+                float y = handJoints[JointType.HandRight].Item2.Y;
+                float z = handJoints[JointType.HandRight].Item1.Z;
+                float pivot = handJoints[JointType.ShoulderRight].Item1.Z;
+
+                if (pivot - z >= 0.3)
+                {
+                    trail.Points.Add(new System.Windows.Point { X = x, Y = y });
                 }
             }
         }
@@ -288,11 +303,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                         encoder.Save(fs);
                     }
 
-                    this.StatusText = string.Format(Properties.Resources.SavedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SavedScreenshotStatusTextFormat, path);
                 }
                 catch (IOException)
                 {
-                    this.StatusText = string.Format(Properties.Resources.FailedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.FailedScreenshotStatusTextFormat, path);
                 }
             }
         }
@@ -368,8 +383,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private void Sensor_IsAvailableChanged(object sender, IsAvailableChangedEventArgs e)
         {
             // on failure, set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.SensorNotAvailableStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SensorNotAvailableStatusText;
         }
 
         /// <summary>
@@ -394,7 +409,7 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 System.IO.Stream audioStream = audioBeamList[0].OpenInputStream();
 
                 // create the convert stream
-                this.audioStream = new KinectAudioStream(audioStream);
+                this.audioStream = new Kinect.KinectAudioStream(audioStream);
             }
 
             RecognizerInfo ri = GetKinectRecognizer();
