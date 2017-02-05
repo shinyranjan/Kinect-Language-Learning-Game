@@ -54,6 +54,8 @@ namespace ColorBasics
 
         private Bitmap bitmap;
 
+        private int n;
+
         private SpeechToText speechToText;
 
         private object textOnScreenLock = new object();
@@ -150,6 +152,8 @@ namespace ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
+
+            int n = 0;
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -250,6 +254,17 @@ namespace ColorBasics
 
                     polygon.Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
 
+                    n++;
+                    n = n % 5;
+                    int success = 0;
+                    if (n == 0)
+                    {
+                        success = update((int)handTipRightColorSpace.X, (int)handTipRightColorSpace.Y);
+                    }
+                        
+                
+                      
+            
                     if (polygon.Points.Count >= 5)
                     {
                         canvas.Children.Add(polygon);
@@ -258,6 +273,14 @@ namespace ColorBasics
                         rightIndexFingerLines[i].Opacity = 0.3f;
                         rightIndexFingerLines[i].StrokeThickness = 20;
                         rightIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
+                    }
+
+                    if(success == 1)
+                    {
+                        textOnScreen = null;
+                        currentlyDisplayedSymbol = null;
+                        readyToDrawNewSymbol = true;
+                        polygon.Points = new System.Windows.Media.PointCollection();
                     }
                 }
                 else
@@ -270,6 +293,7 @@ namespace ColorBasics
                         rightIndexFingerLines[i] = null;
                     }
                 }
+
             }
         }
 
@@ -298,6 +322,10 @@ namespace ColorBasics
                 return this.colorBitmap;
             }
         }
+
+        public bool createBitmap;
+        int[,] bitBox;
+        public Bitmap bitText;
 
         /// <summary>
         /// Execute shutdown tasks
@@ -347,6 +375,9 @@ namespace ColorBasics
 
         }
 
+        int symbolXPosition;
+        int symbolYPosition;
+
         /// <summary>
         /// Handles the color frame data arriving from the sensor
         /// </summary>
@@ -386,14 +417,20 @@ namespace ColorBasics
                                 if (null != textOnScreen)
                                 {
                                     currentlyDisplayedSymbol = DrawLetter(textOnScreen);
-                                    byte[] imgArray = (byte[])converter.ConvertTo(currentlyDisplayedSymbol, typeof(byte[]));
+                                    if (createBitmap)
+                                    {
+                                        bitText = new Bitmap(currentlyDisplayedSymbol);
+                                        bitBox = new int[currentlyDisplayedSymbol.Width, currentlyDisplayedSymbol.Height];
+                                        createBitmap = false;
+                                    }
                                 }
                             }
 
                             int symbolWidth = currentlyDisplayedSymbol.Width;
                             int symbolHeight = currentlyDisplayedSymbol.Height;
-                            int symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
-                            int symbolYPosition = colorFrameDescription.Height / 4;
+                            symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
+                            symbolYPosition = colorFrameDescription.Height / 5;
+ 
                             graphics.DrawImage(currentlyDisplayedSymbol, symbolXPosition, symbolYPosition);
                         }
                                              
@@ -596,9 +633,60 @@ namespace ColorBasics
             }
         }
 
+
         private int update(int x, int y)
         {
-            return 0;
+
+            int sum = 0;
+            int maxsum = 0;
+
+            for(int i = 0; i < bitText.Width; i += 8)
+            {
+                for (int j = 0; j < bitText.Height; j +=8)
+                {
+                    int corI = i + symbolXPosition;
+                    int corJ = j + symbolYPosition;
+                    
+
+
+                    if(currentlyDisplayedSymbol == null ||
+                        x >= symbolXPosition + currentlyDisplayedSymbol.Width ||
+                        x <= symbolXPosition || y <= symbolYPosition ||
+                        y >= symbolYPosition + currentlyDisplayedSymbol.Height) 
+                        {
+                        return 0;
+                        } 
+
+                    if(corI > x - 40 && corI < x + 40 && corJ > y - 40 && corJ < y + 40)
+                    {
+                        if (bitText.GetPixel(i, j) == System.Drawing.Color.FromArgb(0,0,0,0))
+                        {
+                            bitBox[i, j] = 0;
+                        }
+                        else
+                        {
+                            bitBox[i, j] = 1;
+                        }
+                    }
+
+                    if(bitBox[i, j] == 1)
+                    {
+                        sum++;
+                    }
+                    if (bitText.GetPixel(i, j) != System.Drawing.Color.FromArgb(0, 0, 0, 0))
+                    {
+                        maxsum++;
+                    }
+                    
+                }
+                
+            }
+            if (sum > 0.8 * maxsum) {
+                return 1;
+            } else
+            {
+                return 0;
+            }
         }
 
 
@@ -633,6 +721,7 @@ namespace ColorBasics
                 {
                     textOnScreen = translation;
                     readyToDrawNewSymbol = false;
+                    createBitmap = true;
                 }
             }
         }
