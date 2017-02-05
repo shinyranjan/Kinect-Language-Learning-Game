@@ -22,7 +22,9 @@ namespace ColorBasics
 
         public delegate void TextReceivedHandler(object sender, RecognizedTextArgs args);
 
+
         private static readonly string BingSpeechSubscriptionKey = "a159f5f4498d4142aa37d6843bc4c9ed";
+
         private DataRecognitionClient dataRecognitionClient;
         public static readonly string Language = "en-US";
         public event TextReceivedHandler TextReceived;

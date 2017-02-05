@@ -3,26 +3,31 @@
 //     Copyright (c) Microsoft Corporation.  All rights reserved.
 // </copyright>
 //------------------------------------------------------------------------------
+
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Microsoft.Kinect;
+using Microsoft.Speech.AudioFormat;
+using Microsoft.Speech.Recognition;
+using System.Threading;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
+using Microsoft.Samples.Kinect;
+using System.Windows.Shapes;
+using System.Reflection;
+using System.Windows.Interop;
+
 namespace ColorBasics
 {
-    using System;
-    using System.ComponentModel;
-    using System.Diagnostics;
-    using System.Globalization;
-    using System.IO;
-    using System.Windows;
-    using System.Windows.Media;
-    using System.Windows.Media.Imaging;
-    using Microsoft.Kinect;
-    using Microsoft.Speech.AudioFormat;
-    using Microsoft.Speech.Recognition;
-    using System.Threading;
-    using System.Collections.Generic;
-    using System.Drawing;
-    using System.Drawing.Imaging;
-    using System.Drawing.Text;
-    using Microsoft.Samples.Kinect;
-    using System.Windows.Shapes;
+    
 
 
 
@@ -54,7 +59,9 @@ namespace ColorBasics
 
         private Bitmap bitmap;
 
-        private int n;
+        public bool createBitmap;
+        int[,] bitBox;
+        public Bitmap bitText;
 
         private SpeechToText speechToText;
 
@@ -99,11 +106,13 @@ namespace ColorBasics
 
         private bool readyToDrawNewSymbol = true;
         private Image currentlyDisplayedSymbol = null;
-
-        private Thread readingThread;
+        private bool redraw = false;
 
         int rec_time = 2 * 16000;
         private Font simp;
+
+        int symbolXPosition;
+        int symbolYPosition;
 
         /// <summary>
         /// Initializes a new instance of the MainWindow class.
@@ -140,6 +149,7 @@ namespace ColorBasics
             // use the window object as the view model in this simple example
             this.DataContext = this;
 
+
             // Get its audio source
             AudioSource audioSource = this.kinectSensor.AudioSource;
             this.audioBuffer = new byte[audioSource.SubFrameLengthInBytes];
@@ -152,8 +162,6 @@ namespace ColorBasics
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
-
-            int n = 0;
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -191,6 +199,11 @@ namespace ColorBasics
                     continue;
                 }
 
+                float opacity = 0.5f;
+                int strokeThickness = 10;
+
+                
+
                 // Work on left finger
                 if (IsLeftHandTracked(body))
                 {
@@ -201,8 +214,10 @@ namespace ColorBasics
                     {
                         polygon = new Polygon();
                         polygon.Stroke = playerBrushes[i];
-                        polygon.Opacity = 0.3f;
-                        polygon.StrokeThickness = 20;
+                        polygon.Opacity = opacity;
+                        polygon.StrokeThickness = strokeThickness;
+                        polygon.HorizontalAlignment = HorizontalAlignment.Left;
+                        polygon.VerticalAlignment = VerticalAlignment.Center;
                         leftIndexFingerLines[i] = polygon;
                     }
                     else
@@ -215,11 +230,28 @@ namespace ColorBasics
                     if (polygon.Points.Count >= 5)
                     {
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         leftIndexFingerLines[i] = new Polygon();
                         leftIndexFingerLines[i].Stroke = playerBrushes[i];
-                        leftIndexFingerLines[i].Opacity = 0.3f;
-                        leftIndexFingerLines[i].StrokeThickness = 20;
+                        leftIndexFingerLines[i].Opacity = opacity;
+                        leftIndexFingerLines[i].StrokeThickness = strokeThickness;
+                        leftIndexFingerLines[i].HorizontalAlignment = HorizontalAlignment.Left;
+                        leftIndexFingerLines[i].VerticalAlignment = VerticalAlignment.Center;
                         leftIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipLeftColorSpace.X, handTipLeftColorSpace.Y));
+                    }
+
+                    if (update((int)handTipLeftColorSpace.X, (int)handTipLeftColorSpace.Y) == 1)
+                    {
+                        if (canvas.Children.Count > 2)
+                        {
+                            canvas.Children.RemoveRange(2, canvas.Children.Count - 2);
+                        }
+                        Template.Fill = System.Windows.Media.Brushes.Transparent;
+                        textOnScreen = null;
+                        currentlyDisplayedSymbol = null;
+                        readyToDrawNewSymbol = true;
+                        redraw = true;
+                        textOnScreen = "Success!";
                     }
                 }
                 else
@@ -229,6 +261,7 @@ namespace ColorBasics
                     {
                         // End and draw polygon
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         leftIndexFingerLines[i] = null;
                     }
                 }
@@ -243,8 +276,8 @@ namespace ColorBasics
                     {
                         polygon = new Polygon();
                         polygon.Stroke = playerBrushes[i];
-                        polygon.Opacity = 0.3f;
-                        polygon.StrokeThickness = 20;
+                        polygon.Opacity = opacity;
+                        polygon.StrokeThickness = strokeThickness;
                         rightIndexFingerLines[i] = polygon;
                     }
                     else
@@ -253,34 +286,32 @@ namespace ColorBasics
                     }
 
                     polygon.Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
-
-                    n++;
-                    n = n % 5;
-                    int success = 0;
-                    if (n == 0)
-                    {
-                        success = update((int)handTipRightColorSpace.X, (int)handTipRightColorSpace.Y);
-                    }
-                        
-                
-                      
             
                     if (polygon.Points.Count >= 5)
                     {
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         rightIndexFingerLines[i] = new Polygon();
                         rightIndexFingerLines[i].Stroke = playerBrushes[i];
-                        rightIndexFingerLines[i].Opacity = 0.3f;
-                        rightIndexFingerLines[i].StrokeThickness = 20;
+                        rightIndexFingerLines[i].Opacity = opacity;
+                        rightIndexFingerLines[i].StrokeThickness = strokeThickness;
+                        rightIndexFingerLines[i].HorizontalAlignment = HorizontalAlignment.Left;
+                        rightIndexFingerLines[i].VerticalAlignment = VerticalAlignment.Center;
                         rightIndexFingerLines[i].Points.Add(new System.Windows.Point(handTipRightColorSpace.X, handTipRightColorSpace.Y));
                     }
 
-                    if(success == 1)
+                    if(update((int)handTipRightColorSpace.X, (int)handTipRightColorSpace.Y) == 1)
                     {
+                        if (canvas.Children.Count > 2)
+                        {
+                            canvas.Children.RemoveRange(2, canvas.Children.Count - 2);
+                        }
+                        Template.Fill = System.Windows.Media.Brushes.Transparent;
                         textOnScreen = null;
                         currentlyDisplayedSymbol = null;
                         readyToDrawNewSymbol = true;
-                        polygon.Points = new System.Windows.Media.PointCollection();
+                        redraw = true;
+                        textOnScreen = "Success!";
                     }
                 }
                 else
@@ -290,6 +321,7 @@ namespace ColorBasics
                     {
                         // End and draw polygon
                         canvas.Children.Add(polygon);
+                        System.Windows.Controls.Canvas.SetZIndex(polygon, 5);
                         rightIndexFingerLines[i] = null;
                     }
                 }
@@ -323,9 +355,7 @@ namespace ColorBasics
             }
         }
 
-        public bool createBitmap;
-        int[,] bitBox;
-        public Bitmap bitText;
+        
 
         /// <summary>
         /// Execute shutdown tasks
@@ -375,8 +405,7 @@ namespace ColorBasics
 
         }
 
-        int symbolXPosition;
-        int symbolYPosition;
+
 
         /// <summary>
         /// Handles the color frame data arriving from the sensor
@@ -409,7 +438,7 @@ namespace ColorBasics
 
                         Graphics graphics = Graphics.FromImage(bitmap);
 
-                        if (null != textOnScreen)
+                        if (null != textOnScreen && redraw)
                         {
                             lock (textOnScreenLock)
                             {
@@ -426,14 +455,29 @@ namespace ColorBasics
                                 }
                             }
 
+                            var bitmap = new System.Drawing.Bitmap(currentlyDisplayedSymbol);
+                            var bitmapSource = Imaging.CreateBitmapSourceFromHBitmap(bitmap.GetHbitmap(),
+                                                                                                  IntPtr.Zero,
+                                                                                                  Int32Rect.Empty,
+                                                                                                  BitmapSizeOptions.FromEmptyOptions()
+                                  );
+                            bitmap.Dispose();
+
                             int symbolWidth = currentlyDisplayedSymbol.Width;
                             int symbolHeight = currentlyDisplayedSymbol.Height;
                             symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
-                            symbolYPosition = colorFrameDescription.Height / 5;
- 
-                            graphics.DrawImage(currentlyDisplayedSymbol, symbolXPosition, symbolYPosition);
+                            symbolYPosition = colorFrameDescription.Height / 2 - symbolHeight / 2;
+
+                            System.Windows.Controls.Canvas.SetTop(Template, symbolYPosition);
+                            System.Windows.Controls.Canvas.SetLeft(Template, symbolXPosition);
+                            Template.Width = symbolWidth;
+                            Template.Height = symbolHeight;
+                            Template.Fill = new ImageBrush(bitmapSource);
+                            redraw = false;
+
+
                         }
-                                             
+
 
                         /*
                         using (Font drawFont = new Font("Microsoft JhengHei", 120))
@@ -465,7 +509,8 @@ namespace ColorBasics
                     }
                 }
             }
-        }
+        }    
+
 
         /// <summary>
         /// Handles the event which the sensor becomes unavailable (E.g. paused, closed, unplugged).
@@ -532,6 +577,7 @@ namespace ColorBasics
             {
                 Debug.WriteLine("No recognizer");
             }
+
         }
 
         #region Audio recognition
@@ -570,15 +616,20 @@ namespace ColorBasics
         {
             
             // Speech utterance confidence below which we treat speech as if it hadn't been heard
-            const double ConfidenceThreshold = 0.7;
+            const double ConfidenceThreshold = 0.4;
 
             if (!reading && e.Result.Confidence >= ConfidenceThreshold)
             {
                 Debug.WriteLine("Matched");
-
+                if(canvas.Children.Count > 2 )
+                {
+                    canvas.Children.RemoveRange(2, canvas.Children.Count - 2);
+                }
+                Template.Fill = System.Windows.Media.Brushes.Transparent;
                 textOnScreen = null;
                 currentlyDisplayedSymbol = null;
                 readyToDrawNewSymbol = true;
+                redraw = true;
             }
         }
 
@@ -633,14 +684,18 @@ namespace ColorBasics
             }
         }
 
-
         private int update(int x, int y)
         {
 
             int sum = 0;
             int maxsum = 0;
 
-            for(int i = 0; i < bitText.Width; i += 8)
+            if (bitText == null)
+            {
+                return 0;
+            }
+
+            for (int i = 0; i < bitText.Width; i += 8)
             {
                 for (int j = 0; j < bitText.Height; j +=8)
                 {
@@ -657,7 +712,7 @@ namespace ColorBasics
                         return 0;
                         } 
 
-                    if(corI > x - 40 && corI < x + 40 && corJ > y - 40 && corJ < y + 40)
+                    if(corI > x - 60 && corI < x + 60 && corJ > y - 60 && corJ < y + 60)
                     {
                         if (bitText.GetPixel(i, j) == System.Drawing.Color.FromArgb(0,0,0,0))
                         {
@@ -681,7 +736,7 @@ namespace ColorBasics
                 }
                 
             }
-            if (sum > 0.8 * maxsum) {
+            if (sum > 0.9 * maxsum) {
                 return 1;
             } else
             {
@@ -717,11 +772,17 @@ namespace ColorBasics
             {
                 translation = translation.Replace("。", "");
 
+                // Limit to maximum 2 chars
+                int startIndex = Math.Max(0, translation.Length - 2);
+                translation = translation.Substring(startIndex, Math.Min(2, translation.Length - startIndex));
+
                 lock (textOnScreenLock)
                 {
                     textOnScreen = translation;
                     readyToDrawNewSymbol = false;
                     createBitmap = true;
+                    redraw = true;
+
                 }
             }
         }
@@ -738,7 +799,7 @@ namespace ColorBasics
             PrivateFontCollection privateFont = new PrivateFontCollection();
 
             privateFont.AddFontFile(System.IO.Path.Combine(Environment.CurrentDirectory, "font.ttf"));
-            Font font = new Font(privateFont.Families[0], 324, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
+            Font font = new Font(privateFont.Families[0], 500, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
 
             SizeF textSize;
@@ -772,7 +833,6 @@ namespace ColorBasics
         }
         #endregion
     }
-
 }
 
 
