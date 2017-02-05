@@ -30,6 +30,8 @@ namespace ColorBasics
     /// </summary>
     public partial class MainWindow : Window
     {
+
+        ImageConverter converter;
         /// <summary>
         /// Active Kinect sensor
         /// </summary>
@@ -131,6 +133,8 @@ namespace ColorBasics
             this.audioBeamReader = audioSource.OpenReader();
             this.audioBeamReader.FrameArrived += this.Reader_AudioFrameArrived;
 
+            converter = new ImageConverter(); 
+
             // initialize the components (controls) of the window
             this.InitializeComponent();
         }
@@ -195,7 +199,7 @@ namespace ColorBasics
                 }
 
                 // Console.WriteLine(handJoints[JointType.HandRight].Item1.X + ", " + handJoints[JointType.HandRight].Item1.Y + ", " + handJoints[JointType.HandRight].Item1.Z);
-                Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
+                //Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
                 float x = handJoints[JointType.HandRight].Item2.X;
                 float y = handJoints[JointType.HandRight].Item2.Y;
                 float z = handJoints[JointType.HandRight].Item1.Z;
@@ -298,15 +302,6 @@ namespace ColorBasics
 
                         Graphics graphics = Graphics.FromImage(bitmap);
 
-                        lock (handJoints)
-                        {
-                            foreach (KeyValuePair<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> pair in handJoints)
-                            {
-                                float x = pair.Value.Item2.X;
-                                float y = pair.Value.Item2.Y;
-                                graphics.DrawEllipse(new System.Drawing.Pen(System.Drawing.Color.Red, 5), x, y, 10, 10);
-                            }
-                        }
 
                         if (null != textOnScreen)
                         {
@@ -316,15 +311,33 @@ namespace ColorBasics
                                 if (null != textOnScreen)
                                 {
                                     currentlyDisplayedSymbol = DrawLetter(textOnScreen);
+                                    byte[] imgArray = (byte[])converter.ConvertTo(currentlyDisplayedSymbol, typeof(byte[]));
                                 }
                             }
 
                             int symbolWidth = currentlyDisplayedSymbol.Width;
                             int symbolHeight = currentlyDisplayedSymbol.Height;
                             int symbolXPosition = colorFrameDescription.Width / 2 - symbolWidth / 2;
-                            int symbolYPosition = colorFrameDescription.Height / 2 - symbolHeight / 2;
+                            int symbolYPosition = colorFrameDescription.Height / 4;
                             graphics.DrawImage(currentlyDisplayedSymbol, symbolXPosition, symbolYPosition);
                         }
+
+                        int success = 0;
+                        lock (handJoints)
+                        {
+                            foreach (KeyValuePair<JointType, Tuple<CameraSpacePoint, ColorSpacePoint>> pair in handJoints)
+                            {
+                                float x = pair.Value.Item2.X;
+                                float y = pair.Value.Item2.Y;
+                                graphics.DrawEllipse(new System.Drawing.Pen(System.Drawing.Color.Red, 5), x, y, 10, 10);
+                                if(null != textOnScreen)
+                                {
+                                    success = update((int)x, (int)y); 
+                                }
+                            }
+                        }
+
+                        
 
                         /*
                         using (Font drawFont = new Font("Microsoft JhengHei", 120))
@@ -400,7 +413,7 @@ namespace ColorBasics
 
 
                 var keyword = new Choices();
-                keyword.Add(new SemanticResultValue("translate", 1));
+                keyword.Add(new SemanticResultValue("cancel", 1));
 
                 var gb = new GrammarBuilder { Culture = ri.Culture };
                 gb.Append(keyword);
@@ -460,15 +473,15 @@ namespace ColorBasics
         {
             
             // Speech utterance confidence below which we treat speech as if it hadn't been heard
-            const double ConfidenceThreshold = 0.3;
+            const double ConfidenceThreshold = 0.7;
 
             if (!reading && e.Result.Confidence >= ConfidenceThreshold)
             {
                 Debug.WriteLine("Matched");
 
-                this.reading = true;
-                this.readingThread = new Thread(AudioTranslationThread);
-                this.readingThread.Start();
+                textOnScreen = null;
+                currentlyDisplayedSymbol = null;
+                readyToDrawNewSymbol = true;
             }
         }
 
@@ -531,17 +544,31 @@ namespace ColorBasics
 
         private void SpeechToText_TextReceived(object sender, SpeechToText.RecognizedTextArgs args)
         {
-            if (null == args.Text)
+            String text = args.Text;
+
+            if (null == text)
             {
                 return;
             }
 
             // After receiving the text, translate it into Chinese
-            Console.WriteLine("Recognized text: " + args.Text);
-            string translation = TranslateText.Translate(args.Text);
-
+            Console.WriteLine("Recognized text: " + text);
+            String translation = null;
+            if (args.Text.Contains("translate")) {
+                string tobesearched = "translate";
+                string code = text.Substring(text.IndexOf(tobesearched) + tobesearched.Length);
+                translation = TranslateText.Translate(code);
+            }
+            else if (args.Text.Contains("Translate"))
+            {
+                string tobesearched = "Translate";
+                string code = text.Substring(text.IndexOf(tobesearched) + tobesearched.Length);
+                translation = TranslateText.Translate(code);
+            }
             if (null != translation)
             {
+                translation = translation.Replace("。", "");
+
                 lock (textOnScreenLock)
                 {
                     textOnScreen = translation;
@@ -561,7 +588,7 @@ namespace ColorBasics
         {
             PrivateFontCollection privateFont = new PrivateFontCollection();
             privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
-            Font font = new Font(privateFont.Families[0], 108, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
+            Font font = new Font(privateFont.Families[0], 324, System.Drawing.FontStyle.Regular, GraphicsUnit.Pixel);
 
             SizeF textSize;
             Graphics graphics;
