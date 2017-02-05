@@ -1,11 +1,4 @@
-﻿//------------------------------------------------------------------------------
-// <copyright file="MainWindow.xaml.cs" company="Microsoft">
-//     Copyright (c) Microsoft Corporation.  All rights reserved.
-// </copyright>
-//------------------------------------------------------------------------------
-namespace Microsoft.Samples.Kinect.ColorBasics
-{
-    using System;
+﻿    using System;
     using System.ComponentModel;
     using System.Diagnostics;
     using System.Globalization;
@@ -14,30 +7,22 @@ namespace Microsoft.Samples.Kinect.ColorBasics
     using System.Windows.Media;
     using System.Windows.Media.Imaging;
     using Microsoft.Kinect;
-    using Microsoft.Speech.AudioFormat;
-    using Microsoft.Speech.Recognition;
-    using System.Threading;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Drawing.Text;
 
-
-
+namespace ColorBasics
+{
     /// <summary>
     /// Interaction logic for MainWindow
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
+
         /// <summary>
         /// Active Kinect sensor
         /// </summary>
         private KinectSensor kinectSensor = null;
-
-
-        private SpeechRecognitionEngine speechEngine = null;
-
-        private KinectAudioStream audioStream = null;
 
         /// <summary>
         /// Reader for color frames
@@ -62,13 +47,6 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         /// Current status text to display
         /// </summary>
         private string statusText = null;
-
-        private bool reading;
-        private Thread readingThread;
-        private FileStream fileStream;
-
-        int rec_time = 2 * 16000;
-        private Font simp;
 
         /// <summary>
         /// Initializes a new instance of the MainWindow class.
@@ -101,17 +79,14 @@ namespace Microsoft.Samples.Kinect.ColorBasics
             this.kinectSensor.Open();
 
             // set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.NoSensorStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.NoSensorStatusText;
 
             // use the window object as the view model in this simple example
             this.DataContext = this;
 
             // initialize the components (controls) of the window
             this.InitializeComponent();
-
-            
-
         }
 
         private void BodyFrameReader_FrameArrived(object sender, BodyFrameArrivedEventArgs e)
@@ -152,7 +127,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     body.Joints[JointType.HandLeft].Position,
                     body.Joints[JointType.HandTipLeft].Position,
                     body.Joints[JointType.HandRight].Position,
-                    body.Joints[JointType.HandTipRight].Position
+                    body.Joints[JointType.HandTipRight].Position,
+                    body.Joints[JointType.ShoulderRight].Position
                 };
 
                 ColorSpacePoint[] colorSpacePoints = new ColorSpacePoint[jointPoints.Length];
@@ -164,6 +140,19 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                     handJoints[JointType.HandTipLeft] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[1], colorSpacePoints[1]);
                     handJoints[JointType.HandRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[2], colorSpacePoints[2]);
                     handJoints[JointType.HandTipRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[3], colorSpacePoints[3]);
+                    handJoints[JointType.ShoulderRight] = new Tuple<CameraSpacePoint, ColorSpacePoint>(jointPoints[4], colorSpacePoints[4]);
+                }
+
+                // Console.WriteLine(handJoints[JointType.HandRight].Item1.X + ", " + handJoints[JointType.HandRight].Item1.Y + ", " + handJoints[JointType.HandRight].Item1.Z);
+                Console.WriteLine(handJoints[JointType.HandRight].Item1.Z + ", " + handJoints[JointType.ShoulderRight].Item1.Z);
+                float x = handJoints[JointType.HandRight].Item2.X;
+                float y = handJoints[JointType.HandRight].Item2.Y;
+                float z = handJoints[JointType.HandRight].Item1.Z;
+                float pivot = handJoints[JointType.ShoulderRight].Item1.Z;
+
+                if (pivot - z >= 0.3)
+                {
+                    trail.Points.Add(new System.Windows.Point { X = x, Y = y });
                 }
             }
         }
@@ -228,19 +217,6 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                 this.kinectSensor.Close();
                 this.kinectSensor = null;
             }
-
-            if (null != this.audioStream)
-            {
-                this.audioStream.SpeechActive = false;
-            }
-
-            if (null != this.speechEngine)
-            {
-                this.speechEngine.SpeechRecognized -= this.SpeechRecognized;
-                this.speechEngine.SpeechRecognitionRejected -= this.SpeechRejected;
-                this.speechEngine.RecognizeAsyncStop();
-            }
-
         }
 
         /// <summary>
@@ -273,11 +249,11 @@ namespace Microsoft.Samples.Kinect.ColorBasics
                         encoder.Save(fs);
                     }
 
-                    this.StatusText = string.Format(Properties.Resources.SavedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SavedScreenshotStatusTextFormat, path);
                 }
                 catch (IOException)
                 {
-                    this.StatusText = string.Format(Properties.Resources.FailedScreenshotStatusTextFormat, path);
+                    this.StatusText = string.Format(Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.FailedScreenshotStatusTextFormat, path);
                 }
             }
         }
@@ -349,176 +325,8 @@ namespace Microsoft.Samples.Kinect.ColorBasics
         private void Sensor_IsAvailableChanged(object sender, IsAvailableChangedEventArgs e)
         {
             // on failure, set the status text
-            this.StatusText = this.kinectSensor.IsAvailable ? Properties.Resources.RunningStatusText
-                                                            : Properties.Resources.SensorNotAvailableStatusText;
+            this.StatusText = this.kinectSensor.IsAvailable ? Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.RunningStatusText
+                                                            : Microsoft.Samples.Kinect.ColorBasics.Properties.Resources.SensorNotAvailableStatusText;
         }
-
-        /// <summary>
-        /// Execute initialization tasks.
-        /// </summary>
-        /// <param name="sender">object sending the event</param>
-        /// <param name="e">event arguments</param>
-        private void WindowLoaded(object sender, RoutedEventArgs e)
-        {
-            PrivateFontCollection privateFont = new PrivateFontCollection();
-            privateFont.AddFontFile(Path.Combine(Environment.CurrentDirectory, "font.ttf"));
-            simp = new Font(privateFont.Families[0], 108,
-                                 System.Drawing.FontStyle.Regular,
-                                 GraphicsUnit.Pixel);
-
-            DrawText("A", System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
-
-            if (this.kinectSensor != null)
-            {
-                // grab the audio stream
-                System.Collections.Generic.IReadOnlyList<AudioBeam> audioBeamList = this.kinectSensor.AudioSource.AudioBeams;
-                System.IO.Stream audioStream = audioBeamList[0].OpenInputStream();
-
-                // create the convert stream
-                this.audioStream = new KinectAudioStream(audioStream);
-            }
-
-            RecognizerInfo ri = GetKinectRecognizer();
-
-            if (null != ri)
-            {
-                this.speechEngine = new SpeechRecognitionEngine(ri.Id);
-
-
-                var keyword = new Choices();
-                keyword.Add(new SemanticResultValue("draw", 1));
-
-                var gb = new GrammarBuilder { Culture = ri.Culture };
-                gb.Append(keyword);
-                var g = new Grammar(gb);
-                speechEngine.LoadGrammar(g);
-
-                speechEngine.SpeechRecognized += this.SpeechRecognized;
-                speechEngine.SpeechRecognitionRejected += this.SpeechRejected;
-
-                // let the convertStream know speech is going active
-                this.audioStream.SpeechActive = true;
-
-                speechEngine.SetInputToAudioStream(
-                    this.audioStream, new SpeechAudioFormatInfo(EncodingFormat.Pcm, 16000, 16, 1, 32000, 2, null));
-
-                speechEngine.RecognizeAsync(RecognizeMode.Multiple);
-
-                
-            }
-            else
-            {
-                Debug.WriteLine("No recognizer");
-            }
-        }
-
-
-        private static RecognizerInfo GetKinectRecognizer()
-        {
-            Debug.WriteLine("In Get");
-            foreach (RecognizerInfo recognizer in SpeechRecognitionEngine.InstalledRecognizers())
-            {
-                Debug.WriteLine("In For");
-                string value;
-                recognizer.AdditionalInfo.TryGetValue("Kinect", out value);
-                if ("True".Equals(value, StringComparison.OrdinalIgnoreCase) && "en-US".Equals(recognizer.Culture.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return recognizer;
-                }
-            }
-
-            return null;
-        }
-        /// <summary>
-        /// Handler for rejected speech events.
-        /// </summary>
-        /// <param name="sender">object sending the event.</param>
-        /// <param name="e">event arguments.</param>
-        private void SpeechRejected(object sender, SpeechRecognitionRejectedEventArgs e)
-        {
-            
-        }
-
-        /// <summary>
-        /// Handler for rejected speech events.
-        /// </summary>
-        /// <param name="sender">object sending the event.</param>
-        /// <param name="e">event arguments.</param>
-        private void SpeechRecognized(object sender, SpeechRecognizedEventArgs e)
-        {
-            
-            // Speech utterance confidence below which we treat speech as if it hadn't been heard
-            const double ConfidenceThreshold = 0.3;
-
-            if (!reading && e.Result.Confidence >= ConfidenceThreshold)
-            {
-                Debug.WriteLine("Matched");
-
-                this.reading = true;
-                this.readingThread = new Thread(AudioTranslationThread);
-                this.readingThread.Start();
-            }
-        }
-
-        private void AudioTranslationThread()
-        {
-
-            byte[] audioBuffer = new byte[rec_time];
-
-            Debug.WriteLine("Recording");
-            int readCount = audioStream.Read(audioBuffer, 0, audioBuffer.Length);
-            Debug.WriteLine("Done");
-
-            //TODO Recognition and Translation
-
-            this.reading = false;
-            
-        }
-
-        private void DrawLetter(String letter)
-        {
-            DrawText(letter, System.Drawing.Color.DarkRed, System.Drawing.Color.Empty);
-        }
-
-        private Image DrawText(String text, System.Drawing.Color textColor, System.Drawing.Color backColor)
-        {
-            //first, create a dummy bitmap just to get a graphics object
-            Image img = new Bitmap(1, 1);
-            Graphics drawing = Graphics.FromImage(img);
-
-            //measure the string to see how big the image needs to be
-            SizeF textSize = drawing.MeasureString(text, simp);
-
-            //free up the dummy image and old graphics object
-            img.Dispose();
-            drawing.Dispose();
-
-            //create a new image of the right size
-            img = new Bitmap((int)textSize.Width, (int)textSize.Height);
-
-            drawing = Graphics.FromImage(img);
-
-            //paint the background
-            drawing.Clear(backColor);
-
-            //create a brush for the text
-            System.Drawing.Brush textBrush = new SolidBrush(textColor);
-
-            drawing.DrawString(text, simp, textBrush, 0, 0);
-
-            drawing.Save();
-
-            textBrush.Dispose();
-            drawing.Dispose();
-
-            img.Save(Path.Combine(Environment.CurrentDirectory, "tmp.bmp"));
-            return img;
-
-        }
-
     }
-
 }
-
-
-
